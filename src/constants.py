@@ -1,3 +1,26 @@
+# --- CONSTANTES DE ANOTACIÓN Y MODELO ---
+
+# Mapeo de categorías a scores numéricos.
+CATEGORY_TO_SCORE = {
+    '🟢 STRONG YES': 92.5,
+    '🟡 YES': 77.0,
+    '🟠 MAYBE': 59.5,
+    '🔴 WEAK NO': 39.5,
+    '⚫ STRONG NO': 14.5
+}
+
+# Define el orden explícito de las categorías para la UI y el cálculo de Kappa.
+ORDERED_CATEGORIES = [
+    '⚫ STRONG NO',
+    '🔴 WEAK NO',
+    '🟠 MAYBE',
+    '🟡 YES',
+    '🟢 STRONG YES'
+]
+
+# --- CONSTANTES PARA EL MUESTREO DIRIGIDO ---
+
+# Mapeo de categorías a palabras clave para el muestreo dirigido.
 INDUSTRY_KEYWORDS_MAP = {
     # Creative & Communication
     'Art/Creative': ['art', 'creative', 'artist', 'illustrator', 'graphic', 'photographer', 'designer'],

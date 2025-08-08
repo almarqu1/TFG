@@ -1,36 +1,28 @@
 import pandas as pd
 import numpy as np
 import argparse
-import ast
 import os
 from tqdm import tqdm
-from utils import INDUSTRY_KEYWORDS_MAP
+from pathlib import Path
+import sys
 
-def safe_literal_eval(s):
-    """
-    Intenta evaluar un string que representa un literal de Python (ej. una lista).
-    Devuelve una lista vacía si la entrada es inválida, NaN o no es un string.
-    """
-    if isinstance(s, str):
-        try:
-            return ast.literal_eval(s)
-        except (ValueError, SyntaxError):
-            return []
-    return []
+project_root = Path(__file__).parent.parent
+sys.path.append(str(project_root))
+
+from src.constants import INDUSTRY_KEYWORDS_MAP
+from src.text_utils import parse_string_list
+
+
 
 def sample_targeted_pairs(offers_df, cvs_df, num_pairs):
-    """
-    Genera pares 'dirigidos' buscando coincidencias entre la industria de la oferta
-    y una lista de keywords asociadas en el CV, usando el mapa de industrias.
-    """
     print(f"Iniciando muestreo dirigido para generar {num_pairs} pares...")
     pairs = set()
     
     cvs_df['searchable_text'] = cvs_df.apply(
         lambda row: ' '.join(
-            str(s) for s in safe_literal_eval(row['positions']) + 
-                           safe_literal_eval(row['major_field_of_studies']) +
-                           safe_literal_eval(row['skills'])
+            str(s) for s in parse_string_list(row['positions']) + 
+                           parse_string_list(row['major_field_of_studies']) +
+                           parse_string_list(row['skills'])
         ).lower(),
         axis=1
     )
@@ -100,6 +92,9 @@ def sample_random_pairs(offers_df, cvs_df, num_pairs):
 
 
 def main(args):
+    # Configuración de la semilla para reproducibilidad
+    np.random.seed(args.seed)
+    
     print("Cargando datos procesados...")
 
     def parse_list_string(s):
@@ -139,13 +134,15 @@ def main(args):
     print(f"Total de pares únicos generados: {len(final_pairs_df)}")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Crea el conjunto de test 'Gold Standard' mediante muestreo estratificado.")
-    parser.add_argument('--offers_processed_input', type=str, default='data/01_processed/offers_processed.csv')
-    parser.add_argument('--cvs_processed_input', type=str, default='data/01_processed/cvs_processed.csv')
-    parser.add_argument('--output_file', type=str, default='data/02_test_sets/test_set_pairs_to_annotate.csv')
-    parser.add_argument('--num_pairs', type=int, default=360, help="Número total aproximado de pares a generar.")
-    args = parser.parse_args()
-
-    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
+    parser = argparse.ArgumentParser(description="Crea el conjunto de test 'Gold Standard'.")
+    default_offers = str(project_root / 'data/01_processed/offers_processed.csv')
+    default_cvs = str(project_root / 'data/01_processed/cvs_processed.csv')
+    default_output = str(project_root / 'data/02_test_sets/test_set_pairs_to_annotate.csv')
     
+    parser.add_argument('--offers_processed_input', type=str, default=default_offers)
+    parser.add_argument('--cvs_processed_input', type=str, default=default_cvs)
+    parser.add_argument('--output_file', type=str, default=default_output)
+    parser.add_argument('--num_pairs', type=int, default=360)
+    parser.add_argument('--seed', type=int, default=42, help="Semilla aleatoria para reproducibilidad.")
+    args = parser.parse_args()
     main(args)

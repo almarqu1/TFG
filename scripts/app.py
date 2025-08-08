@@ -7,33 +7,18 @@ import sys
 # --- CONFIGURACIÓN Y CONSTANTES ---
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
-from src.text_utils import crear_input_oferta, crear_input_cv
+
+from src.constants import CATEGORY_TO_SCORE, ORDERED_CATEGORIES
+from src.text_utils import parse_string_list
 
 st.set_page_config(layout="wide", page_title="DistilMatch Annotation Tool")
 
-# Mapeo de categorías a scores numéricos.
-CATEGORY_TO_SCORE = {
-    '🟢 STRONG YES': 92.5,
-    '🟡 YES': 77.0,
-    '🟠 MAYBE': 59.5,
-    '🔴 WEAK NO': 39.5,
-    '⚫ STRONG NO': 14.5
-}
-
-# Define el orden explícito de las categorías para la visualización en la UI.
-ORDERED_CATEGORIES = [
-    '⚫ STRONG NO',
-    '🔴 WEAK NO',
-    '🟠 MAYBE',
-    '🟡 YES',
-    '🟢 STRONG YES'
-]
 
 # Color para los encabezados de las secciones de datos para mejorar la legibilidad.
 HEADER_COLOR = "#17A2B8"
 
 # Rutas de los archivos de datos.
-DATA_DIR = Path('data')
+DATA_DIR = project_root / 'data' # CAMBIO: Usar project_root para rutas más robustas
 PROCESSED_DATA_DIR = DATA_DIR / '01_processed'
 TEST_SETS_DIR = DATA_DIR / '02_test_sets'
 OFFERS_FILE = PROCESSED_DATA_DIR / 'offers_processed.csv'
@@ -42,26 +27,20 @@ PAIRS_FILE = TEST_SETS_DIR / 'test_set_pairs_to_annotate.csv'
 
 # --- FUNCIONES DE AYUDA Y CARGA DE DATOS ---
 
-def parse_list_string(s):
-    """Convierte de forma segura un string que representa una lista a una lista real."""
-    if isinstance(s, str):
-        try: return ast.literal_eval(s)
-        except (ValueError, SyntaxError): return []
-    if isinstance(s, list): return s
-    return []
+
 
 @st.cache_data
 def load_data():
     """Carga los DataFrames de ofertas y CVs, convirtiendo las columnas de listas."""
     try:
-        converters = {'skills_list': parse_list_string, 'industries_list': parse_list_string}
+        converters = {'skills_list': parse_string_list, 'industries_list': parse_string_list}
         offers_df = pd.read_csv(OFFERS_FILE, converters=converters)
         cvs_df = pd.read_csv(CVS_FILE)
         offers_df['job_id'] = offers_df['job_id'].astype(str)
         cvs_df['candidate_id'] = cvs_df['candidate_id'].astype(str)
         return offers_df, cvs_df
     except FileNotFoundError as e:
-        st.error(f"Error al cargar datos: {e.filename}. Ejecuta desde la raíz del proyecto.")
+        st.error(f"Error al cargar datos: {e.filename}. Asegúrate de que los archivos existen.")
         return None, None
 
 def display_list_as_bullets(title, items, color):
@@ -152,16 +131,16 @@ with col2:
     st.subheader("👤 Currículum Vitae")
     st.markdown(f"**ID:** `{candidate_id}`")
     
-    display_list_as_bullets("Posiciones:", parse_list_string(cv_details.get('positions')), color=HEADER_COLOR)
-    display_list_as_bullets("Educación:", parse_list_string(cv_details.get('degree_names')), color=HEADER_COLOR)
-    display_list_as_bullets("Universidades:", parse_list_string(cv_details.get('educational_institution_name')), color=HEADER_COLOR)
+    display_list_as_bullets("Posiciones:", parse_string_list(cv_details.get('positions')), color=HEADER_COLOR)
+    display_list_as_bullets("Educación:", parse_string_list(cv_details.get('degree_names')), color=HEADER_COLOR)
+    display_list_as_bullets("Universidades:", parse_string_list(cv_details.get('educational_institution_name')), color=HEADER_COLOR)
     st.markdown("---")
     
     with st.expander("Ver Skills, Empresas y Certificaciones"):
-        display_list_as_bullets("Skills:", parse_list_string(cv_details.get('skills')), color=HEADER_COLOR)
-        display_list_as_bullets("Empresas Anteriores:", parse_list_string(cv_details.get('professional_company_names')), color=HEADER_COLOR)
-        display_list_as_bullets("Certificaciones:", parse_list_string(cv_details.get('certification_skills')), color=HEADER_COLOR)
-        display_list_as_bullets("Idiomas:", parse_list_string(cv_details.get('languages')), color=HEADER_COLOR)
+        display_list_as_bullets("Skills:", parse_string_list(cv_details.get('skills')), color=HEADER_COLOR)
+        display_list_as_bullets("Empresas Anteriores:", parse_string_list(cv_details.get('professional_company_names')), color=HEADER_COLOR)
+        display_list_as_bullets("Certificaciones:", parse_string_list(cv_details.get('certification_skills')), color=HEADER_COLOR)
+        display_list_as_bullets("Idiomas:", parse_string_list(cv_details.get('languages')), color=HEADER_COLOR)
     
     responsibilities = cv_details.get('responsibilities')
     if responsibilities and isinstance(responsibilities, str):
