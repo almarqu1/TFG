@@ -12,8 +12,6 @@ sys.path.append(str(project_root))
 from src.constants import INDUSTRY_KEYWORDS_MAP
 from src.text_utils import parse_string_list
 
-
-
 def sample_targeted_pairs(offers_df, cvs_df, num_pairs):
     print(f"Iniciando muestreo dirigido para generar {num_pairs} pares...")
     pairs = set()
@@ -92,22 +90,15 @@ def sample_random_pairs(offers_df, cvs_df, num_pairs):
 
 
 def main(args):
-    # Configuración de la semilla para reproducibilidad
+    # Asegura reproducibilidad
     np.random.seed(args.seed)
     
     print("Cargando datos procesados...")
 
-    def parse_list_string(s):
-        try:
-            return ast.literal_eval(s)
-        except (ValueError, SyntaxError):
-            return []
-
     converters = {
-        'skills_list': parse_list_string,
-        'industries_list': parse_list_string
+        'skills_list': parse_string_list,
+        'industries_list': parse_string_list
     }
-
     offers_df = pd.read_csv(args.offers_processed_input, converters=converters)
     cvs_df = pd.read_csv(args.cvs_processed_input)
 
@@ -120,13 +111,14 @@ def main(args):
     print("\nCombinando, eliminando duplicados y barajando...")
     final_pairs_df = pd.concat([targeted_pairs_df, random_pairs_df], ignore_index=True)
     final_pairs_df.drop_duplicates(inplace=True)
-    final_pairs_df = final_pairs_df.sample(frac=1, random_state=42).reset_index(drop=True)
+    final_pairs_df = final_pairs_df.sample(frac=1, random_state=args.seed).reset_index(drop=True)
 
     final_pairs_df['category'] = ''
     final_pairs_df['score'] = ''
     final_pairs_df['annotator_id'] = ''
     final_pairs_df['justification'] = ''
-
+    
+    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
     final_pairs_df.to_csv(args.output_file, index=False)
     
     print("\n¡Proceso completado!")

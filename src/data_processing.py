@@ -92,7 +92,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Pre-procesa los datos crudos de ofertas y CVs.")
     
-    project_root = Path(__file__).resolve().parent.parent.parent
+    project_root = Path(__file__).resolve().parent.parent
     
     # Rutas de input
     parser.add_argument('--offers_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/postings.csv'))
