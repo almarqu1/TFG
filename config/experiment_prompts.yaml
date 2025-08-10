@@ -1,0 +1,29 @@
+P-01_zero_shot:
+  description: "Control (Baseline): Zero-shot sin CoT."
+  path: "report/prompts/P-01_zero_shot.txt"
+  techniques:
+    - zero-shot
+    - json-output
+  
+P-02_few_shot:
+  description: "Few-shot sin CoT."
+  path: "report/prompts/P-02_few_shot.txt"
+  techniques:
+    - few-shot
+    - json-output
+
+P-03-cot_zero_shot:
+  description: "Zero-shot con Chain-of-Thought."
+  path: "report/prompts/P-03-cot_zero_shot.txt"
+  techniques:
+    - zero-shot
+    - chain-of-thought
+    - json-output
+
+P-04_cot_few_shot:
+  description: "Combinación fuerte: Few-shot con Chain-of-Thought."
+  path: "report/prompts/P-04_cot_few_shot.txt"
+  techniques:
+    - few-shot
+    - chain-of-thought
+    - json-output
