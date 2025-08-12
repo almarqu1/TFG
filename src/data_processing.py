@@ -12,11 +12,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # --- CONSTANTES GLOBALES ---
 
 # Fecha de corte estática para los cálculos de experiencia.
-# Asegura la reproducibilidad y la consistencia temporal con el dataset.
 DATA_CUTOFF_DATE = datetime(2024, 1, 1)
 
 # Alias para términos que indican que un trabajo es el actual.
-CURRENT_JOB_ALIASES = {'current', 'present', 'ongoing', 'till date', 'none', '', 'N/A'}
+CURRENT_JOB_ALIASES = {'current', 'present', 'ongoing', 'till date', 'none', ''}
 
 
 # --- FUNCIONES MODULARES DE PROCESAMIENTO ---
@@ -24,21 +23,12 @@ CURRENT_JOB_ALIASES = {'current', 'present', 'ongoing', 'till date', 'none', '',
 def _format_work_history(row):
     """
     Combina la información de puestos, fechas y habilidades en un único string formateado.
-
-    Itera sobre las listas paralelas de la experiencia laboral de un candidato y
-    genera un bloque de texto legible que resume cada puesto.
-
-    Args:
-        row (pd.Series): Una fila del DataFrame de CVs.
-
-    Returns:
-        str: Un string multi-línea con el historial laboral formateado.
     """
     try:
         positions = ast.literal_eval(row['positions'])
         start_dates = ast.literal_eval(row['start_dates'])
         end_dates = ast.literal_eval(row['end_dates'])
-        skills_per_job = ast.literal_eval(row['related_skills_in_job'])
+        skills_per_job = ast.literal_eval(row['related_skils_in_job'])
     except (ValueError, SyntaxError):
         return ""
 
@@ -58,15 +48,6 @@ def _format_work_history(row):
 def _calculate_experience_for_row(row):
     """
     Calcula la experiencia total para una única fila de candidato, con una comprobación de sanidad.
-
-    Suma la duración de cada puesto y luego aplica un "techo" para asegurar que
-    la experiencia total no exceda el tiempo transcurrido desde el primer trabajo del candidato.
-
-    Args:
-        row (pd.Series): Una fila del DataFrame de CVs.
-
-    Returns:
-        float: La experiencia total calculada y verificada en años.
     """
     try:
         start_dates_str = row['start_dates']
@@ -82,13 +63,12 @@ def _calculate_experience_for_row(row):
         logging.warning(f"No se pudieron parsear las listas de fechas para el candidato índice {row.name}. Se asigna 0 experiencia.")
         return 0.0
 
-    # 1. Calcular la suma de la duración de todos los trabajos
     total_experience_days = 0
     parsed_start_dates = []
     for start_str, end_str in zip(start_dates, end_dates):
         try:
             start_dt = parse_date(start_str)
-            parsed_start_dates.append(start_dt) # Guardar para el paso 2
+            parsed_start_dates.append(start_dt)
 
             if str(end_str).lower().strip() in CURRENT_JOB_ALIASES:
                 end_dt = DATA_CUTOFF_DATE
@@ -101,17 +81,14 @@ def _calculate_experience_for_row(row):
         except (TypeError, ValueError):
             continue
 
-    # 2. Encontrar el máximo de experiencia posible (el "techo")
     if not parsed_start_dates:
-        return 0.0 # No hay fechas de inicio válidas
+        return 0.0
 
     first_job_start_date = min(parsed_start_dates)
     max_possible_experience_days = (DATA_CUTOFF_DATE - first_job_start_date).days
 
-    # 3. Aplicar el techo: la experiencia real no puede ser mayor que el máximo posible.
     capped_experience_days = min(total_experience_days, max_possible_experience_days)
     
-    # Devuelve el valor verificado, asegurándose de que no sea negativo.
     return round(max(0, capped_experience_days) / 365.25, 2)
 
 
@@ -147,41 +124,44 @@ def process_offers(offers_path, job_skills_path, skills_map_path, job_industries
 
 def process_cvs(cvs_path):
     """
-    Carga y procesa los datos de los CVs, incluyendo el cálculo de la experiencia total
-    y la generación de un historial laboral formateado.
+    Carga y procesa los datos de los CVs, creando columnas enriquecidas y
+    eliminando las columnas de origen redundantes.
     """
     logging.info("Iniciando el procesamiento de CVs...")
     
     try:
         usecols_cvs = [
-            'career_objective', 'positions', 'start_dates', 'end_dates', 'related_skills_in_job',
+            'career_objective', 'positions', 'start_dates', 'end_dates', 'related_skils_in_job',
             'skills', 'degree_names', 'responsibilities', 
             'major_field_of_studies', 'educational_institution_name', 
             'professional_company_names', 'extra_curricular_activity_types',
             'languages', 'certification_skills'          
         ]
         cvs_df = pd.read_csv(cvs_path, usecols=usecols_cvs)
-    except FileNotFoundError as e:
-        logging.error(f"Archivo no encontrado: {e.filename}. Abortando.")
-        raise
-    except ValueError as e:
-        logging.error(f"Error al leer las columnas del CSV. Asegúrate de que las columnas requeridas existen. Error: {e}")
+    except (FileNotFoundError, ValueError) as e:
+        logging.error(f"Error al leer el archivo o las columnas de CVs. Asegúrate de que el archivo y las columnas existen. Error: {e}")
         raise
 
-    logging.info("Calculando la experiencia laboral total para cada candidato (con verificación)...")
+    logging.info("Calculando la experiencia laboral total y generando historial formateado...")
     cvs_df['total_experience_years'] = cvs_df.apply(_calculate_experience_for_row, axis=1)
-    
-    logging.info("Generando historial laboral formateado...")
     cvs_df['formatted_work_history'] = cvs_df.apply(_format_work_history, axis=1)
     
-    logging.info("Generando IDs únicos para los candidatos...")
+    logging.info("Generando IDs únicos y limpiando columnas redundantes...")
     cvs_df.reset_index(inplace=True)
     cvs_df.rename(columns={'index': 'candidate_id'}, inplace=True)
     cvs_df['candidate_id'] = 'cand_' + cvs_df['candidate_id'].astype(str)
     
-    final_cv_columns = ['candidate_id', 'total_experience_years', 'formatted_work_history'] + usecols_cvs
-    final_cv_columns = list(dict.fromkeys(final_cv_columns))
-    cvs_processed = cvs_df[final_cv_columns]
+    # Estas columnas han cumplido su propósito y ahora son redundantes.
+    source_cols_to_drop = ['positions', 'start_dates', 'end_dates', 'related_skils_in_job']
+    cvs_df.drop(columns=source_cols_to_drop, inplace=True)
+
+    # Definir el orden final de las columnas para mayor claridad en el archivo de salida.
+    # Colocar las columnas generadas y de identificación al principio.
+    first_cols = ['candidate_id', 'total_experience_years', 'formatted_work_history']
+    other_cols = [col for col in cvs_df.columns if col not in first_cols]
+    final_order = first_cols + other_cols
+    
+    cvs_processed = cvs_df[final_order]
     
     return cvs_processed
 
@@ -200,7 +180,7 @@ def main(args):
 
     cvs_processed = process_cvs(args.cvs_input)
     cvs_processed.to_csv(args.cvs_output, index=False)
-    logging.info(f"CVs procesados (con datos enriquecidos) y guardados en: {args.cvs_output}")
+    logging.info(f"CVs procesados (con esquema limpio y enriquecido) y guardados en: {args.cvs_output}")
     
     logging.info("¡Pre-procesamiento completado con éxito!")
 
