@@ -2,11 +2,118 @@ import pandas as pd
 import argparse
 import logging
 from pathlib import Path
+from datetime import datetime
+import ast  # Para la evaluación segura de literales de Python (e.g., listas en formato string)
+from dateutil.parser import parse as parse_date  # Parser de fechas flexible
 
-
+# Configuración del logging para el seguimiento del pipeline
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# --- CONSTANTES GLOBALES ---
+
+# Fecha de corte estática para los cálculos de experiencia.
+# Asegura la reproducibilidad y la consistencia temporal con el dataset.
+DATA_CUTOFF_DATE = datetime(2024, 1, 1)
+
+# Alias para términos que indican que un trabajo es el actual.
+CURRENT_JOB_ALIASES = {'current', 'present', 'ongoing', 'till date', 'none', '', 'N/A'}
+
+
 # --- FUNCIONES MODULARES DE PROCESAMIENTO ---
+
+def _format_work_history(row):
+    """
+    Combina la información de puestos, fechas y habilidades en un único string formateado.
+
+    Itera sobre las listas paralelas de la experiencia laboral de un candidato y
+    genera un bloque de texto legible que resume cada puesto.
+
+    Args:
+        row (pd.Series): Una fila del DataFrame de CVs.
+
+    Returns:
+        str: Un string multi-línea con el historial laboral formateado.
+    """
+    try:
+        positions = ast.literal_eval(row['positions'])
+        start_dates = ast.literal_eval(row['start_dates'])
+        end_dates = ast.literal_eval(row['end_dates'])
+        skills_per_job = ast.literal_eval(row['related_skills_in_job'])
+    except (ValueError, SyntaxError):
+        return ""
+
+    history_entries = []
+    for pos, start, end, skills in zip(positions, start_dates, end_dates, skills_per_job):
+        end_str = str(end).strip().title() if str(end).lower().strip() not in CURRENT_JOB_ALIASES else "Present"
+        
+        entry = f"- {pos} ({start} - {end_str})"
+        if skills and isinstance(skills, list):
+            skills_str = ", ".join(skills)
+            entry += f"\n  Skills: {skills_str}"
+        history_entries.append(entry)
+    
+    return "\n\n".join(history_entries)
+
+
+def _calculate_experience_for_row(row):
+    """
+    Calcula la experiencia total para una única fila de candidato, con una comprobación de sanidad.
+
+    Suma la duración de cada puesto y luego aplica un "techo" para asegurar que
+    la experiencia total no exceda el tiempo transcurrido desde el primer trabajo del candidato.
+
+    Args:
+        row (pd.Series): Una fila del DataFrame de CVs.
+
+    Returns:
+        float: La experiencia total calculada y verificada en años.
+    """
+    try:
+        start_dates_str = row['start_dates']
+        end_dates_str = row['end_dates']
+        
+        if not isinstance(start_dates_str, str) or not isinstance(end_dates_str, str):
+            return 0.0
+
+        start_dates = ast.literal_eval(start_dates_str)
+        end_dates = ast.literal_eval(end_dates_str)
+
+    except (ValueError, SyntaxError):
+        logging.warning(f"No se pudieron parsear las listas de fechas para el candidato índice {row.name}. Se asigna 0 experiencia.")
+        return 0.0
+
+    # 1. Calcular la suma de la duración de todos los trabajos
+    total_experience_days = 0
+    parsed_start_dates = []
+    for start_str, end_str in zip(start_dates, end_dates):
+        try:
+            start_dt = parse_date(start_str)
+            parsed_start_dates.append(start_dt) # Guardar para el paso 2
+
+            if str(end_str).lower().strip() in CURRENT_JOB_ALIASES:
+                end_dt = DATA_CUTOFF_DATE
+            else:
+                end_dt = parse_date(str(end_str))
+            
+            duration = (end_dt - start_dt).days
+            if duration > 0:
+                total_experience_days += duration
+        except (TypeError, ValueError):
+            continue
+
+    # 2. Encontrar el máximo de experiencia posible (el "techo")
+    if not parsed_start_dates:
+        return 0.0 # No hay fechas de inicio válidas
+
+    first_job_start_date = min(parsed_start_dates)
+    max_possible_experience_days = (DATA_CUTOFF_DATE - first_job_start_date).days
+
+    # 3. Aplicar el techo: la experiencia real no puede ser mayor que el máximo posible.
+    capped_experience_days = min(total_experience_days, max_possible_experience_days)
+    
+    # Devuelve el valor verificado, asegurándose de que no sea negativo.
+    return round(max(0, capped_experience_days) / 365.25, 2)
+
 
 def process_offers(offers_path, job_skills_path, skills_map_path, job_industries_path, industries_map_path):
     """Carga, fusiona y limpia los datos de las ofertas de trabajo."""
@@ -39,12 +146,16 @@ def process_offers(offers_path, job_skills_path, skills_map_path, job_industries
     return offers_processed
 
 def process_cvs(cvs_path):
-    """Carga y procesa los datos de los CVs, generando un ID único para cada uno."""
+    """
+    Carga y procesa los datos de los CVs, incluyendo el cálculo de la experiencia total
+    y la generación de un historial laboral formateado.
+    """
     logging.info("Iniciando el procesamiento de CVs...")
     
     try:
         usecols_cvs = [
-            'positions', 'skills', 'degree_names', 'responsibilities', 
+            'career_objective', 'positions', 'start_dates', 'end_dates', 'related_skills_in_job',
+            'skills', 'degree_names', 'responsibilities', 
             'major_field_of_studies', 'educational_institution_name', 
             'professional_company_names', 'extra_curricular_activity_types',
             'languages', 'certification_skills'          
@@ -53,12 +164,23 @@ def process_cvs(cvs_path):
     except FileNotFoundError as e:
         logging.error(f"Archivo no encontrado: {e.filename}. Abortando.")
         raise
+    except ValueError as e:
+        logging.error(f"Error al leer las columnas del CSV. Asegúrate de que las columnas requeridas existen. Error: {e}")
+        raise
 
+    logging.info("Calculando la experiencia laboral total para cada candidato (con verificación)...")
+    cvs_df['total_experience_years'] = cvs_df.apply(_calculate_experience_for_row, axis=1)
+    
+    logging.info("Generando historial laboral formateado...")
+    cvs_df['formatted_work_history'] = cvs_df.apply(_format_work_history, axis=1)
+    
+    logging.info("Generando IDs únicos para los candidatos...")
     cvs_df.reset_index(inplace=True)
     cvs_df.rename(columns={'index': 'candidate_id'}, inplace=True)
     cvs_df['candidate_id'] = 'cand_' + cvs_df['candidate_id'].astype(str)
     
-    final_cv_columns = ['candidate_id'] + usecols_cvs
+    final_cv_columns = ['candidate_id', 'total_experience_years', 'formatted_work_history'] + usecols_cvs
+    final_cv_columns = list(dict.fromkeys(final_cv_columns))
     cvs_processed = cvs_df[final_cv_columns]
     
     return cvs_processed
@@ -69,19 +191,16 @@ def main(args):
     """Función principal que orquesta el pipeline de pre-procesamiento de datos."""
     logging.info("Iniciando el pipeline de pre-procesamiento de datos.")
     
-    # Asegurarse de que los directorios de salida existan
     Path(args.offers_output).parent.mkdir(parents=True, exist_ok=True)
     Path(args.cvs_output).parent.mkdir(parents=True, exist_ok=True)
 
-    # Procesar ofertas
     offers_processed = process_offers(args.offers_input, args.job_skills_input, args.skills_map_input, args.job_industries_input, args.industries_map_input)
     offers_processed.to_csv(args.offers_output, index=False)
     logging.info(f"Ofertas procesadas y guardadas en: {args.offers_output}")
 
-    # Procesar CVs
     cvs_processed = process_cvs(args.cvs_input)
     cvs_processed.to_csv(args.cvs_output, index=False)
-    logging.info(f"CVs procesados (con ID generado) y guardados en: {args.cvs_output}")
+    logging.info(f"CVs procesados (con datos enriquecidos) y guardados en: {args.cvs_output}")
     
     logging.info("¡Pre-procesamiento completado con éxito!")
 
@@ -94,7 +213,6 @@ if __name__ == '__main__':
     
     project_root = Path(__file__).resolve().parent.parent
     
-    # Rutas de input
     parser.add_argument('--offers_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/postings.csv'))
     parser.add_argument('--job_skills_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/jobs/job_skills.csv'))
     parser.add_argument('--skills_map_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/mappings/skills.csv'))
@@ -102,7 +220,6 @@ if __name__ == '__main__':
     parser.add_argument('--industries_map_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/mappings/industries.csv'))
     parser.add_argument('--cvs_input', type=str, default=str(project_root / 'data/00_raw/datasetCV2/resume_data.csv'))
     
-    # Rutas de output
     parser.add_argument('--offers_output', type=str, default=str(project_root / 'data/01_processed/offers_processed.csv'))
     parser.add_argument('--cvs_output', type=str, default=str(project_root / 'data/01_processed/cvs_processed.csv'))
 

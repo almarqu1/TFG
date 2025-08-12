@@ -1,0 +1,80 @@
+# =================================================================
+# FICHERO DE CONFIGURACIÓN GLOBAL
+# =================================================================
+
+# --- Parámetros Globales ---
+global_seed: 42  # Semilla para garantizar la reproducibilidad en todo el proyecto
+
+# --- Rutas a los Datos (Data Paths) ---
+# Organizadas por etapas del pipeline de datos
+data_paths:
+  # 00 - Datos Crudos (Inputs para el pre-procesamiento)
+  raw:
+    offers: "data/00_raw/datasetJobs2/postings.csv"
+    job_skills: "data/00_raw/datasetJobs2/jobs/job_skills.csv"
+    skills_map: "data/00_raw/datasetJobs2/mappings/skills.csv"
+    job_industries: "data/00_raw/datasetJobs2/jobs/job_industries.csv"
+    industries_map: "data/00_raw/datasetJobs2/mappings/industries.csv"
+    cvs: "data/00_raw/datasetCV2/resume_data.csv"
+  
+  # 01 - Datos Procesados (Outputs del pre-procesamiento)
+  processed:
+    offers: "data/01_processed/offers_processed.csv"
+    cvs: "data/01_processed/cvs_processed.csv"
+  
+  # 02 - Conjuntos de Test y Anotación
+  test_sets:
+    pairs_to_annotate: "data/02_test_sets/test_set_pairs_to_annotate.csv"
+    prompt_validation_set: "data/02_test_sets/prompt_validation_set.csv"
+  
+  # 03 - Soft Labels generados por el Teacher
+  intermediate:
+    soft_labels: "data/02_intermediate/soft_labels.jsonl"
+  
+  # 04 - Gold Standard final
+  gold_standard:
+    final_test_set: "data/03_gold_standard/gold_standard_test.csv"
+
+# --- Rutas a los Artefactos de Salida ---
+# Reportes, gráficos, etc.
+output_paths:
+  reports: "outputs/reports"
+  prompt_experiment_results: "outputs/reports/prompt_experiment_raw_results.csv"
+
+# --- Parámetros para la Creación del Set de Test ---
+# Usado por `scripts/create_test_set.py`
+test_set_creation:
+  num_pairs: 360  # Número total de pares a generar
+
+# --- Parámetros del Modelo Teacher (GPT-4) ---
+# Usado por `scripts/run_prompt_experiments.py` y `scripts/generate_soft_labels.py`
+teacher_model:
+  model_name: "gpt-4o" 
+  temperature: 0.1 # Temperatura baja para respuestas consistentes y deterministas
+  max_tokens: 512  # Límite de tokens en la respuesta para controlar costes
+
+# --- Parámetros del Modelo Student (BERT) ---
+# Usado por `src/train.py`
+student_model:
+  # Nombre del modelo base a cargar desde Hugging Face
+  base_model_name: "bert-base-multilingual-cased"
+  # Ruta donde se guardará el modelo entrenado
+  output_dir: "models/distilmatch_student_v1"
+
+# --- Parámetros de Entrenamiento ---
+# Usado por `src/train.py`
+training:
+  num_epochs: 3
+  learning_rate: 2e-5
+  batch_size: 16
+  # Proporción del dataset de entrenamiento que se usará para validación
+  validation_split_size: 0.1 
+
+# --- Parámetros de Active Learning ---
+# Usado por `src/al_strategy.py`
+active_learning:
+  # Umbral de incertidumbre para la selección de muestras (ej. scores entre 50 y 70)
+  uncertainty_threshold_low: 50.0
+  uncertainty_threshold_high: 70.0
+  # Número de muestras a seleccionar en cada ciclo de AL
+  selection_batch_size: 100

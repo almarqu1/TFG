@@ -102,7 +102,7 @@ def main(args):
     offers_df = pd.read_csv(args.offers_processed_input, converters=converters)
     cvs_df = pd.read_csv(args.cvs_processed_input)
 
-    num_targeted = args.num_pairs // 2
+    num_targeted = round(args.num_pairs* 0.8) # 80% de los pares serán dirigidos
     num_random = args.num_pairs - num_targeted
 
     targeted_pairs_df = sample_targeted_pairs(offers_df, cvs_df, num_targeted)

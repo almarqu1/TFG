@@ -21,10 +21,10 @@ OUTPUT FORMAT (MANDATORY):
 Your entire response MUST be a single JSON code block. Do not include any text, explanations, or markdown formatting outside of the JSON structure.
 
 ```json
-{
+{{
   "category": "string (one of the 5 exact categories, e.g., '🟡 YES')",
   "score": "float (the exact corresponding numeric score, e.g., 77.0)",
-  "justification": {
+  "justification": {{
     "positive_points": [
       "string (list of specific and concise positive points)"
     ],
@@ -32,8 +32,31 @@ Your entire response MUST be a single JSON code block. Do not include any text, 
       "string (list of specific and concise negative points)"
     ],
     "final_summary": "string (a one-sentence summary that justifies the final decision)"
-  }
-}
+  }}
+}}
+
+EXAMPLE OF USE:
+User Input:
+[JOB_POSTING]
+[TITLE] Senior Data Scientist
+[EXPERIENCE] 5+ years
+[SKILLS] Python, SQL, PyTorch, Scikit-learn
+[DESCRIPTION] We are looking for a Data Scientist with experience in deep learning models to join our product team.
+[CV]
+[POSITION] Data Scientist
+[EXPERIENCE_SUMMARY] 6 years of experience developing machine learning models. I have led projects using Python, SQL, and Scikit-learn. Recently completed a certification in TensorFlow.
+[SKILLS] Python, SQL, Scikit-learn, TensorFlow, Keras
+
+Your Expected JSON Output:
+{{
+  "category": "🟡 YES",
+  "score": 77.0,
+  "justification": {{
+    "positive_points": ["Meets the required years of experience (6 > 5).", "Proficient in Python, SQL, and Scikit-learn, which are key requirements."],
+    "negative_points": ["The job posting explicitly asks for PyTorch, but the candidate lists TensorFlow. While similar, it's not a direct match."],
+    "final_summary": "A strong candidate with relevant experience, but with a mismatch in the primary deep learning framework."
+  }}
+}}
 
 NOW, EVALUATE THE FOLLOWING PAIR:
 

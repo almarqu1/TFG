@@ -14,7 +14,7 @@ P-02_few_shot:
 
 P-03-cot_zero_shot:
   description: "Zero-shot con Chain-of-Thought."
-  path: "report/prompts/P-03-cot_zero_shot.txt"
+  path: "report/prompts/P-03_cot_zero_shot.txt"
   techniques:
     - zero-shot
     - chain-of-thought
@@ -26,4 +26,11 @@ P-04_cot_few_shot:
   techniques:
     - few-shot
     - chain-of-thought
+    - json-output
+
+P-05_pragmatic_zero_shot:
+  description: "Zero-shot con enfoque 'cazatalentos'."
+  path: "report/prompts/P-05_pragmatic_zero_shot.txt"
+  techniques:
+    - zero-shot
     - json-output

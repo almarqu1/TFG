@@ -14,10 +14,10 @@ OUTPUT FORMAT (MANDATORY):
 Your entire response MUST be a single JSON code block. Do not include any text, explanations, or markdown formatting outside of the JSON structure.
 
 ```json
-{
+{{
   "category": "string (one of the 5 exact categories, e.g., '🟡 YES')",
   "score": "float (the exact corresponding numeric score, e.g., 77.0)",
-  "justification": {
+  "justification": {{
     "positive_points": [
       "string (list of specific and concise positive points)"
     ],
@@ -25,8 +25,8 @@ Your entire response MUST be a single JSON code block. Do not include any text, 
       "string (list of specific and concise negative points)"
     ],
     "final_summary": "string (a one-sentence summary that justifies the final decision)"
-  }
-}
+  }}
+}}
 
 NOW, EVALUATE THE FOLLOWING PAIR:
 
