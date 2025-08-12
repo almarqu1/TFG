@@ -129,7 +129,7 @@ with st.form("annotation_form"):
         - **🟢 MUST INTERVIEW**: Prioridad máxima. El candidato cumple o excede los requisitos clave. ¡Contactar ya!
         - **🟡 PROMISING FIT**: Fuerte potencial. Hay suficientes señales positivas para justificar una llamada de screening.
         - **🟠 BORDERLINE**: Un "no" probable, pero con alguna cualidad redentora. Guardar "por si acaso".
-        - **⚫ NO FIT**: Descarte claro. Falta algún requisito no negociable.
+        - **🔴 NO FIT**: Descarte claro. Falta algún requisito no negociable.
         """)
         
 

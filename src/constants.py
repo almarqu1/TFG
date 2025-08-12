@@ -2,20 +2,19 @@
 
 # Mapeo de categorías a scores numéricos.
 CATEGORY_TO_SCORE = {
-    '🟢 STRONG YES': 92.5,
-    '🟡 YES': 77.0,
-    '🟠 MAYBE': 59.5,
-    '🔴 WEAK NO': 39.5,
-    '⚫ STRONG NO': 14.5
+    '🟢 MUST INTERVIEW': 95.0,
+    '🟡 PROMISING FIT': 70.0,
+    '🟠 BORDERLINE': 45.0,
+    '🔴 NO FIT': 15.0,
+    
 }
 
 # Define el orden explícito de las categorías para la UI y el cálculo de Kappa.
 ORDERED_CATEGORIES = [
-    '⚫ STRONG NO',
-    '🔴 WEAK NO',
-    '🟠 MAYBE',
-    '🟡 YES',
-    '🟢 STRONG YES'
+    '🔴 NO FIT',
+    '🟠 BORDERLINE',
+    '🟡 PROMISING FIT',
+    '🟢 MUST INTERVIEW',
 ]
 
 # --- CONSTANTES PARA EL MUESTREO DIRIGIDO ---
