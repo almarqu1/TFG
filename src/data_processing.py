@@ -3,7 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 from datetime import datetime
-import ast  # Para la evaluación segura de literales de Python (e.g., listas en formato string)
+import ast  # Para la evaluación segura de literales
 from dateutil.parser import parse as parse_date  # Parser de fechas flexible
 
 # Configuración del logging para el seguimiento del pipeline
@@ -93,7 +93,9 @@ def _calculate_experience_for_row(row):
 
 
 def process_offers(offers_path, job_skills_path, skills_map_path, job_industries_path, industries_map_path):
-    """Carga, fusiona y limpia los datos de las ofertas de trabajo."""
+    """
+    Carga, fusiona y limpia los datos de las ofertas de trabajo.
+    """
     logging.info("Iniciando el procesamiento de ofertas...")
     
     try:
@@ -168,7 +170,6 @@ def process_cvs(cvs_path):
 # --- ORQUESTADOR PRINCIPAL ---
 
 def main(args):
-    """Función principal que orquesta el pipeline de pre-procesamiento de datos."""
     logging.info("Iniciando el pipeline de pre-procesamiento de datos.")
     
     Path(args.offers_output).parent.mkdir(parents=True, exist_ok=True)

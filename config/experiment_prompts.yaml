@@ -34,3 +34,12 @@ P-05_pragmatic_zero_shot:
   techniques:
     - zero-shot
     - json-output
+
+P-06_assisted_curation:
+  description: "Co-pilot mode: Proporciona análisis estructurado para asistir con la creación del Golden Set."
+  path: "report/prompts/P-06_assisted_curation.txt"
+  techniques:
+    - zero-shot
+    - chain-of-thought
+    - json-output
+    - co-pilot
