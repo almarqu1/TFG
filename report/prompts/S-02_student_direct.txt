@@ -1,0 +1,7 @@
+Your task is to score the compatibility between a CV and a job posting. Return only and exclusively your final verdict in the format: 'Score: [number]' with a number between 0 and 100.
+
+[CV]
+{text_of_cv}
+
+[JOB POSTING]
+{text_of_job_posting}

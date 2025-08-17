@@ -1,0 +1,7 @@
+Evaluate the compatibility between the following CV and job posting. Analyze the experience, skills, and overall fit. At the end, provide your final verdict in the exact format: 'Score: [number]' where the number is between 0 and 100.
+
+--- CV ---
+{text_of_cv}
+
+--- Job Posting ---
+{text_of_job_posting}

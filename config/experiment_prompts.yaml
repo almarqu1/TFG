@@ -43,3 +43,10 @@ P-06_assisted_curation:
     - chain-of-thought
     - json-output
     - co-pilot
+
+S-01_student_evaluation:
+  description: "Prompt simple y directo para el fine-tuning y evaluación del modelo Student. Espera solo un score como respuesta."
+  path: "report/prompts/S-01_student_evaluation.txt"
+  techniques:
+    - zero-shot
+    - simple-output

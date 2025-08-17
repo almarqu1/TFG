@@ -31,9 +31,23 @@ data_paths:
   intermediate:
     soft_labels: "data/02_intermediate/soft_labels.jsonl"
   
-  # 04 - Gold Standard final
+  # 04 - Gold Standard y Divisiones para Evaluación 
   gold_standard:
-    final_test_set: "data/03_gold_standard/gold_standard_test.csv"
+    # El archivo de entrada curado por el experto humano
+    full: "data/03_gold_standard/gold_standard_full.csv" 
+    
+    # Los archivos de salida generados por el script prepare_evaluation_sets.py
+    train_csv: "data/03_gold_standard/gold_standard_train.csv" 
+    test_csv: "data/03_gold_standard/gold_standard_test.csv" 
+    train_jsonl: "data/03_gold_standard/gold_standard_train.jsonl" 
+    test_jsonl: "data/03_gold_standard/gold_standard_test.jsonl" 
+
+
+# --- Parámetros para la División de Datos --- 
+# Usado por `scripts/prepare_evaluation_sets.py`
+data_split:
+  test_size: 0.20 # Proporción del Golden Set que se usará como conjunto de test sagrado
+  stratify_column: 'category' # Columna para la división estratificada
 
 # --- Rutas a los Artefactos de Salida ---
 # Reportes, gráficos, etc.
@@ -53,13 +67,15 @@ teacher_model:
   temperature: 0.1 # Temperatura baja para respuestas consistentes y deterministas
   max_tokens: 512  # Límite de tokens en la respuesta para controlar costes
 
-# --- Parámetros del Modelo Student (BERT) ---
-# Usado por `src/train.py`
+# --- Parámetros del Modelo Student (Qwen) ---
+# Usado por `src/train.py`, `evaluate_zero_shot.py`, etc.
 student_model:
   # Nombre del modelo base a cargar desde Hugging Face
-  base_model_name: "bert-base-multilingual-cased"
+  base_model_name: "Qwen/Qwen3-4B-Instruct-2507" 
+  # ID del prompt a usar para evaluar y tunear el Student
+  prompt_id: "S-01_student_evaluation" 
   # Ruta donde se guardará el modelo entrenado
-  output_dir: "models/distilmatch_student_v1"
+  output_dir: "models/distilmatch_qwen_lora_v1" # Asegúrate que coincide con tu plan
 
 # --- Parámetros de Entrenamiento ---
 # Usado por `src/train.py`

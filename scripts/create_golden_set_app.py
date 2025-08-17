@@ -185,7 +185,7 @@ with st.sidebar:
         st.dataframe(st.session_state.golden_pairs_df[['candidate_id', 'job_id', 'category']].tail(), use_container_width=True)
     
     # Botón para descargar el trabajo realizado.
-    st.download_button("📥 Descargar Golden Set (CSV)", st.session_state.golden_pairs_df.to_csv(index=False).encode('utf-8'), "golden_standard_full.csv", "text/csv")
+    st.download_button("📥 Descargar Golden Set (CSV)", st.session_state.golden_pairs_df.to_csv(index=False).encode('utf-8'), "gold_standard_full.csv", "text/csv")
 
 
 # --- INTERFAZ PRINCIPAL ---
