@@ -50,3 +50,11 @@ S-01_student_evaluation:
   techniques:
     - zero-shot
     - simple-output
+
+S-03_student_silver_bullet:
+  description: "Prompt ultra-restrictivo para forzar al modelo a dar únicamente el score."
+  path: "report/prompts/S-03_student_silver_bullet.txt"
+  techniques:
+    - zero-shot
+    - system-persona
+    - constrained-output

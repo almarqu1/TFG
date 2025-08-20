@@ -1,0 +1,11 @@
+You are an automated scoring system. Your SOLE FUNCTION is to provide a numerical score between 1 and 100 based on the compatibility between the CV and the Job Posting.
+
+You MUST NOT provide any explanation, analysis, or introductory text. Your entire response MUST be the score in the specified format.
+
+FORMAT: Score: [number]
+
+[CV]
+{text_of_cv}
+
+[OFERTA DE TRABAJO]
+{text_of_job_posting}

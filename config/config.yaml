@@ -53,17 +53,21 @@ data_split:
 # Reportes, gráficos, etc.
 output_paths:
   reports: "outputs/reports"
-  prompt_experiment_results: "outputs/reports/prompt_experiment_raw_results.csv"
+  
+  eval_results:
+    prompt_experiment_results: "outputs/reports/prompt_experiment_raw_results.csv"
+    student_baseline: "outputs/reports/student_baseline_results.csv"
+
 
 # --- Parámetros para la Creación del Set de Test ---
 # Usado por `scripts/create_test_set.py`
 test_set_creation:
   num_pairs: 360  # Número total de pares a generar
 
-# --- Parámetros del Modelo Teacher (GPT-4) ---
+# --- Parámetros del Modelo Teacher (Gemini 2.5 Pro) ---
 # Usado por `scripts/run_prompt_experiments.py` y `scripts/generate_soft_labels.py`
 teacher_model:
-  model_name: "gpt-4o" 
+  model_name: "google/gemini-2.5-pro-latest" 
   temperature: 0.1 # Temperatura baja para respuestas consistentes y deterministas
   max_tokens: 512  # Límite de tokens en la respuesta para controlar costes
 
@@ -73,7 +77,7 @@ student_model:
   # Nombre del modelo base a cargar desde Hugging Face
   base_model_name: "Qwen/Qwen3-4B-Instruct-2507" 
   # ID del prompt a usar para evaluar y tunear el Student
-  prompt_id: "S-01_student_evaluation" 
+  prompt_id: "S-03_student_silver_bullet" 
   # Ruta donde se guardará el modelo entrenado
   output_dir: "models/distilmatch_qwen_lora_v1" # Asegúrate que coincide con tu plan
 
