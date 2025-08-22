@@ -58,3 +58,11 @@ S-03_student_silver_bullet:
     - zero-shot
     - system-persona
     - constrained-output
+
+# config/experiment_prompts.yaml
+P-07_zero_shot_gemini_friendly:
+  path: "report/prompts/P-07_gemini_friendly.yaml"
+  description: "Prompt optimizado para Gemini, más conciso y con formato input-first."
+  techniques:
+    - zero-shot
+    - json-output

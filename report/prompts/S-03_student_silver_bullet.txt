@@ -2,7 +2,7 @@ You are an automated scoring system. Your SOLE FUNCTION is to provide a numerica
 
 You MUST NOT provide any explanation, analysis, or introductory text. Your entire response MUST be the score in the specified format.
 
-FORMAT: Score: [number]
+FORMAT: "Score: [number]"
 
 [CV]
 {text_of_cv}

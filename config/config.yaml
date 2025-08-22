@@ -16,6 +16,9 @@ data_paths:
     job_industries: "data/00_raw/datasetJobs2/jobs/job_industries.csv"
     industries_map: "data/00_raw/datasetJobs2/mappings/industries.csv"
     cvs: "data/00_raw/datasetCV2/resume_data.csv"
+  cvs_processed_csv: "data/01_processed/cvs_processed.csv"       
+  offers_processed_csv: "data/01_processed/offers_processed.csv" 
+  unlabeled_pairs_csv: "data/01_processed/unlabeled_pairs.csv"   
   
   # 01 - Datos Procesados (Outputs del pre-procesamiento)
   processed:
@@ -57,6 +60,7 @@ output_paths:
   eval_results:
     prompt_experiment_results: "outputs/reports/prompt_experiment_raw_results.csv"
     student_baseline: "outputs/reports/student_baseline_results.csv"
+    teacher_candidate: "outputs/reports/teacher_results.csv"
 
 
 # --- Parámetros para la Creación del Set de Test ---
@@ -67,9 +71,9 @@ test_set_creation:
 # --- Parámetros del Modelo Teacher (Gemini 2.5 Pro) ---
 # Usado por `scripts/run_prompt_experiments.py` y `scripts/generate_soft_labels.py`
 teacher_model:
-  model_name: "google/gemini-2.5-pro-latest" 
-  temperature: 0.1 # Temperatura baja para respuestas consistentes y deterministas
-  max_tokens: 512  # Límite de tokens en la respuesta para controlar costes
+  model_name: "gemini-2.5-pro" 
+  temperature: 0.2 # Temperatura baja para respuestas consistentes y deterministas
+  prompt_id: "P-07_zero_shot_gemini_friendly"  # ID del prompt a usar para el Teacher
 
 # --- Parámetros del Modelo Student (Qwen) ---
 # Usado por `src/train.py`, `evaluate_zero_shot.py`, etc.
@@ -98,3 +102,11 @@ active_learning:
   uncertainty_threshold_high: 70.0
   # Número de muestras a seleccionar en cada ciclo de AL
   selection_batch_size: 100
+
+silver_set_generation:
+  output_jsonl_path: "data/02_intermediate/silver_standard_train.jsonl"
+  num_samples_to_generate: 9000  
+  # Delay en segundos entre peticiones. 12 para Free Tier (5 RPM), 0.5 para Paid Tier (150 RPM)
+  delay_between_requests_sec: 0.0
+  # Límite de palabras por campo para evitar errores de contexto largo
+  max_words_per_field: 600 

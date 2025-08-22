@@ -30,7 +30,7 @@ TEST_SETS_DIR = DATA_DIR / '02_test_sets'
 INTERMEDIATE_DIR = DATA_DIR / '02_intermediate'
 
 # Modelo de Gemini a utilizar
-MODEL_NAME = "gemini-2.5-pro-latest"
+MODEL_NAME = "gemini-1.5-pro-latest" # Asegúrate de que este es el modelo correcto
 
 # --- FUNCIONES DE AYUDA ---
 
@@ -66,6 +66,21 @@ def setup_api_client():
     except Exception as e:
         print(f"Error de configuración de API: {e}")
         exit()
+
+def extract_json_from_response(raw_text: str) -> str | None:
+    """
+    Extrae de forma robusta un bloque JSON de una cadena de texto.
+    
+    Busca el primer '{' y el último '}' para delimitar el JSON, ignorando
+    los bloques de código Markdown (```json) y otros textos extraños.
+    """
+    try:
+        start_index = raw_text.index('{')
+        end_index = raw_text.rindex('}') + 1
+        return raw_text[start_index:end_index]
+    except ValueError:
+        # Se produce si '{' o '}' no se encuentran en el texto
+        return None
 
 # --- FUNCIÓN PRINCIPAL DE EJECUCIÓN ---
 
@@ -107,7 +122,6 @@ def main(prompt_name):
     generation_config = genai.GenerationConfig(temperature=0.1)
     model = genai.GenerativeModel(MODEL_NAME, generation_config=generation_config)
     
-    # Crear un nombre de archivo de salida dinámico para el experimento
     output_filename = f"soft_labels_{prompt_name}.jsonl"
     output_file_path = INTERMEDIATE_DIR / output_filename
     INTERMEDIATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -129,17 +143,29 @@ def main(prompt_name):
                 print("Deteniendo ejecución por error en la plantilla del prompt.")
                 break
             
+            raw_response_text = ""
             try:
                 response = model.generate_content(prompt)
-                json_str = response.text.strip().removeprefix("```json").removesuffix("```").strip()
-                result_json = json.loads(json_str)
-                result_json.update({'job_id': job_id, 'candidate_id': candidate_id})
-                f_out.write(json.dumps(result_json) + '\n')
+                raw_response_text = response.text
+                
+                # Usar la función robusta para extraer solo la parte del JSON
+                json_str = extract_json_from_response(raw_response_text)
 
-            except json.JSONDecodeError:
-                error_data = {'job_id': job_id, 'candidate_id': candidate_id, 'error': 'JSONDecodeError', 'raw_response': response.text}
+                if json_str:
+                    # Intentar cargar el JSON extraído
+                    result_json = json.loads(json_str)
+                    result_json.update({'job_id': job_id, 'candidate_id': candidate_id})
+                    f_out.write(json.dumps(result_json) + '\n')
+                else:
+                    # Si no se encontró ningún bloque JSON en la respuesta
+                    raise ValueError("No JSON object could be found in the response.")
+
+            except (json.JSONDecodeError, ValueError) as e:
+                # Captura tanto errores de formato JSON como el caso de no encontrar un JSON
+                error_data = {'job_id': job_id, 'candidate_id': candidate_id, 'error': f"{type(e).__name__}", 'raw_response': raw_response_text}
                 f_out.write(json.dumps(error_data) + '\n')
             except Exception as e:
+                # Captura otros errores inesperados (ej. de la API)
                 error_data = {'job_id': job_id, 'candidate_id': candidate_id, 'error': str(e)}
                 f_out.write(json.dumps(error_data) + '\n')
 
@@ -148,7 +174,6 @@ def main(prompt_name):
     print(f"\n✅ ¡Proceso completado para el prompt '{prompt_name}'!")
 
 if __name__ == "__main__":
-    # Configuración del parser de argumentos de la línea de comandos
     parser = argparse.ArgumentParser(description='Genera soft labels para DistilMatch usando un prompt específico.')
     parser.add_argument(
         '--prompt_name',
@@ -158,5 +183,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     
-    # Llamar a la función principal con el argumento proporcionado
     main(args.prompt_name)

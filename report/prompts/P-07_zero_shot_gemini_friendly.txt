@@ -1,0 +1,6 @@
+CONTEXT
+Job Posting:
+{text_of_job_posting}
+
+Candidate CV:
+{text_of_cv}
