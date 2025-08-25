@@ -5,7 +5,7 @@ You MUST NOT provide any explanation, analysis, or introductory text. Your entir
 FORMAT: "Score: [number]"
 
 [CV]
-{text_of_cv}
+{cv}
 
 [OFERTA DE TRABAJO]
-{text_of_job_posting}
+{job_description}

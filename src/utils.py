@@ -12,8 +12,9 @@ común (como la carga de configuración o el parseo de respuestas) sea consisten
 import yaml
 import re
 import json
+import pandas as pd
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -72,3 +73,63 @@ def parse_json_from_response(raw_text: str) -> Optional[Dict[str, Any]]:
         return json.loads(text[json_start : json_end + 1])
     except (json.JSONDecodeError, ValueError):
         return None
+    
+def format_entity_text(row: pd.Series, sections: Dict[str, Any]) -> str:
+    """
+    Función genérica para construir un bloque de texto estructurado a partir de una fila.
+
+    Args:
+        row: Una fila (pd.Series) de un DataFrame.
+        sections: Un diccionario que define las secciones del texto.
+                  Las claves son los títulos de sección.
+                  Los valores pueden ser un string (nombre de columna) o una
+                  función lambda que formatea varias columnas.
+    """
+    parts = []
+    
+    def add_section(title: str, content: Any):
+        # Solo añadimos la sección si el contenido no es nulo, NaN, o una cadena vacía.
+        if pd.notna(content) and str(content).strip():
+            parts.append(f"--- {title.upper()} ---\n{str(content).strip()}")
+
+    for title, source in sections.items():
+        try:
+            if isinstance(source, str): # Si es un simple nombre de columna
+                add_section(title, row.get(source))
+            elif callable(source): # Si es una función de formateo
+                add_section(title, source(row))
+        except Exception:
+            # Captura errores si una columna esperada por una lambda no existe, etc.
+            # Esto hace la función más robusta.
+            continue
+            
+    return "\n\n".join(parts)
+
+def get_cv_sections() -> Dict[str, Any]:
+    """Define la estructura y el contenido de la sección de CV."""
+    return {
+        "Total Years of Experience": 'total_experience_years',
+        "Career Objective": 'career_objective',
+        "Formatted Work History": 'formatted_work_history',
+        "Skills": 'skills',
+        "Education": lambda r: (
+            f"Institución: {r.get('educational_institution_name', 'N/A')}\n"
+            f"Grado: {r.get('degree_names', 'N/A')}\n"
+            f"Especialidad: {r.get('major_field_of_studies', 'N/A')}"
+        ),
+        "Languages": 'languages',
+        "Certifications": 'certification_skills',
+    }
+    
+def get_offer_sections() -> Dict[str, Any]:
+    """Define la estructura y el contenido de la sección de Oferta."""
+    return {
+        "Job Details": lambda r: (
+            f"Title: {r.get('title', 'N/A')}\n"
+            f"Experience Level: {r.get('formatted_experience_level', 'N/A')}\n"
+            f"Work Type: {r.get('formatted_work_type', 'N/A')}"
+        ),
+        "Description": 'description',
+        "Required Skills": 'skills_list',
+        "Industries": 'industries_list',
+    }

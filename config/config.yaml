@@ -70,9 +70,7 @@ teacher_model:
   prompt_id: "P-07_zero_shot_gemini_friendly"
 
 student_model:
-  # IMPORTANTE: Usar el ID oficial del modelo de Hugging Face.
-  # Ejemplo: "Qwen/Qwen2-7B-Instruct"
-  base_model_name: "Qwen/Qwen2-7B-Instruct" # <-- REVISAR Y ACTUALIZAR
+  base_model_name: "Qwen/Qwen3-4B-Instruct-2507"
   prompt_id: "S-03_student_silver_bullet" 
   output_dir: "models/distilmatch_qwen_lora_v1"
 
