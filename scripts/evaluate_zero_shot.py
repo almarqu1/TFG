@@ -1,194 +1,219 @@
 # TFG_DistilMatch/scripts/evaluate_zero_shot.py
 
 """
-Script de Evaluación "Zero-Shot" para los modelos Student y Teacher.
+Script de Evaluación "Zero-Shot" para Modelos de Lenguaje.
 
 Propósito:
-Este script evalúa el rendimiento de un modelo de lenguaje (ya sea un modelo local
-como Qwen o un modelo de API como Gemini) en la tarea de scoring de compatibilidad
-CV-oferta, sin ningún fine-tuning previo.
+Este script establece el rendimiento base (baseline) de diferentes LLMs en la tarea de
+scoring de compatibilidad CV-oferta sin ningún tipo de fine-tuning. Es un paso
+fundamental para:
+1.  Seleccionar objetivamente el mejor modelo "Teacher" (el que mejor se alinea
+    con el juicio humano de fábrica).
+2.  Establecer la métrica de rendimiento que el modelo "Student" deberá superar
+    después del proceso de Knowledge Distillation.
 
-Ejecución:
+Uso:
 - Para evaluar el Student (Qwen): `python scripts/evaluate_zero_shot.py student`
 - Para evaluar el Teacher (Gemini): `python scripts/evaluate_zero_shot.py teacher`
-
-Resultados Generados:
-1.  Un archivo CSV en `outputs/reports/` (ej. `student_baseline_results.csv`) que contiene
-    un registro detallado de cada predicción, incluyendo el prompt, el score real,
-    el score predicho y la respuesta completa del modelo. Este archivo es crucial
-    para el análisis de errores.
-2.  Un resumen de las métricas de rendimiento (MAE y Correlación de Spearman)
-    impreso directamente en la consola al finalizar la ejecución.
 """
 
 import pandas as pd
-import yaml
 import torch
-import re
-import argparse 
-import google.generativeai as genai 
-import dotenv 
+import argparse
+import google.generativeai as genai
+import dotenv
 import os
-import time 
+import time
+import logging
 from pathlib import Path
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, GenerationConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from sklearn.metrics import mean_absolute_error
-from scipy.stats import spearmanr
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from scipy.stats import spearmanr, pearsonr
+from abc import ABC, abstractmethod
+from typing import Dict, Any
+from src.utils import load_config, parse_score_from_string
 
-# Carga de Configuración Centralizada 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_PATH = PROJECT_ROOT / "config" / "config.yaml"
-with open(CONFIG_PATH, 'r') as f:
-    config = yaml.safe_load(f)
+# --- 1. CONFIGURACIÓN Y UTILIDADES (Candidatos a src/utils.py) ---
 
-# Extracción de Parámetros desde el config 
-TEST_DATASET_PATH = PROJECT_ROOT / config['data_paths']['gold_standard']['test_jsonl']
-OUTPUT_DIR = PROJECT_ROOT / config['output_paths']['reports']
-STUDENT_BASELINE_RESULTS_PATH = PROJECT_ROOT / config['output_paths']['eval_results']['student_baseline']
-TEACHER_RESULTS_PATH = PROJECT_ROOT / config['output_paths']['eval_results']['teacher_candidate']
-STUDENT_MODEL_NAME = config['student_model']['base_model_name']
-TEACHER_MODEL_NAME = config['teacher_model']['model_name']
+# Configuración del logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True) 
-
-def parse_score(text_response: str) -> float | None:
-    if not text_response:
-        return None
-    match = re.search(r"Score:\s*([0-9]+\.?[0-9]*)", text_response, re.IGNORECASE)
-    if match:
-        try:
-            return float(match.group(1))
-        except (ValueError, IndexError):
-            return None
-    return None
-
-def load_model_and_tokenizer(model_name: str):
-    print(f"Cargando modelo local: {model_name}...")
-    bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(model_name, quantization_config=bnb_config, device_map="auto")
-    model.generation_config = GenerationConfig(max_new_tokens=150, do_sample=False, pad_token_id=tokenizer.pad_token_id)
-    print("Modelo y tokenizador cargados y configurados para evaluación determinista.")
-    return model, tokenizer
-
-def load_dataset(dataset_path: Path) -> pd.DataFrame:
-    try:
-        print(f"Cargando dataset desde: {dataset_path}")
-        return pd.read_json(dataset_path, lines=True)
-    except FileNotFoundError:
-        print(f"Error: No se encontró el archivo de dataset en {dataset_path}")
-        return pd.DataFrame()
-
-def run_teacher_evaluation(dataset: pd.DataFrame) -> pd.DataFrame:
-    print(f"Evaluando con el modelo Teacher de API: {TEACHER_MODEL_NAME}")
-    
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("La variable de entorno GOOGLE_API_KEY no está configurada.")
-    genai.configure(api_key=api_key)
-    
-    safety_settings = {
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-    }
-    
-    model = genai.GenerativeModel(TEACHER_MODEL_NAME, safety_settings=safety_settings)
-    predictions = []
-
-    for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0], desc=f"Evaluando {TEACHER_MODEL_NAME}"):
-        prompt = row['prompt']
-        true_score = row['response']
-        
-        try:
-            response = model.generate_content(prompt)
-            if response.parts:
-                predicted_score = parse_score(response.text)
-                full_response = response.text
-            else:
-                finish_reason = response.candidates[0].finish_reason if response.candidates else "N/A"
-                print(f"\nRespuesta vacía en la fila {index}. Razón de finalización: {finish_reason}")
-                predicted_score = None
-                full_response = f"EMPTY_RESPONSE | Finish Reason: {finish_reason}"
-        except Exception as e:
-            print(f"\nError de API no manejado en la fila {index}: {e}")
-            predicted_score = None
-            full_response = f"API_ERROR: {e}"
-            with open("failed_prompts.txt", "a", encoding="utf-8") as f:
-                f.write(f"--- ERROR: {e} ---\n{prompt}\n\n")
-
-        predictions.append({'prompt': prompt, 'true_score': true_score, 'predicted_score': predicted_score, 'full_response': full_response})
-        
-        # Añadimos delay para respetar el Rate Limit de la Free Tier (5 RPM) 
-        time.sleep(12)
-
-    return pd.DataFrame(predictions)
-    
-def run_student_evaluation(model, tokenizer, dataset: pd.DataFrame) -> pd.DataFrame:
-    predictions = []
-    for index, row in tqdm(dataset.iterrows(), total=dataset.shape[0], desc=f"Evaluando {STUDENT_MODEL_NAME}"):
-        prompt = row['prompt']
-        true_score = row['response']
-        messages = [{"role": "user", "content": prompt}]
-        text_input = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        model_inputs = tokenizer([text_input], return_tensors="pt").to(model.device)
-        generated_ids = model.generate(**model_inputs)
-        response_text = tokenizer.batch_decode(generated_ids[:, model_inputs.input_ids.shape[1]:], skip_special_tokens=True)[0]
-        predicted_score = parse_score(response_text)
-        predictions.append({'prompt': prompt, 'true_score': true_score, 'predicted_score': predicted_score, 'full_response': response_text})
-    return pd.DataFrame(predictions)
-
-def calculate_and_print_metrics(results_df: pd.DataFrame, model_type: str):
+def calculate_and_log_metrics(results_df: pd.DataFrame, model_name: str):
+    """Calcula y muestra las métricas de evaluación clave."""
     df = results_df.copy()
-    df['true_score'] = df['true_score'].apply(lambda x: parse_score(str(x)) if isinstance(x, str) else float(x))
+    # Limpiamos el df para asegurar que solo tenemos pares válidos para el cálculo.
+    df['true_score'] = df['true_score'].apply(lambda x: parse_score_from_string(str(x)))
     df.dropna(subset=['predicted_score', 'true_score'], inplace=True)
-    if df.empty:
-        print("No se pudieron calcular las métricas: no hay predicciones o valores reales válidos después de la limpieza.")
+    
+    if len(df) < 2:
+        logging.warning("No hay suficientes predicciones válidas para calcular las métricas.")
         return
+
     y_true = df['true_score'].astype(float)
     y_pred = df['predicted_score'].astype(float)
+
     mae = mean_absolute_error(y_true, y_pred)
     spearman_corr, _ = spearmanr(y_true, y_pred)
-    
-    print(f"\n--- Resultados de la Evaluación para: {model_type.upper()} ---")
-    print(f"Error Absoluto Medio (MAE): {mae:.4f}")
-    print(f"Correlación de Spearman (ρ): {spearman_corr:.4f}")
-    print("-----------------------------------------")
+    pearson_corr, _ = pearsonr(y_true, y_pred)
+
+    logging.info(f"\n--- Métricas de Evaluación para: {model_name.upper()} ---")
+    logging.info(f"Pares Válidos Evaluados: {len(df)}")
+    logging.info(f"Error Absoluto Medio (MAE): {mae:.4f}")
+    logging.info(f"Correlación de Pearson (r): {pearson_corr:.4f} (Mide relación lineal)")
+    logging.info(f"Correlación de Spearman (ρ): {spearman_corr:.4f} (Mide relación monotónica, más robusta a outliers)")
+    logging.info("--------------------------------------------------")
+
+
+# --- 2. ABSTRACCIÓN DE MODELOS ---
+
+class Evaluator(ABC):
+    """Clase base abstracta para cualquier evaluador de modelos."""
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+
+    @abstractmethod
+    def predict(self, prompt: str) -> Dict[str, Any]:
+        """Debe devolver un diccionario con 'predicted_score' y 'full_response'."""
+        pass
+
+    def evaluate(self, dataset: pd.DataFrame) -> pd.DataFrame:
+        """Ciclo de evaluación genérico que itera sobre un dataset."""
+        predictions = []
+        pbar = tqdm(dataset.iterrows(), total=len(dataset), desc=f"Evaluando {self.model_name}")
+        for _, row in pbar:
+            prompt = row['prompt']
+            true_score_str = row['response']
+            
+            result = self.predict(prompt)
+            
+            predictions.append({
+                'prompt': prompt,
+                'true_score': true_score_str,
+                'predicted_score': result['predicted_score'],
+                'full_response': result['full_response']
+            })
+        return pd.DataFrame(predictions)
+
+class StudentEvaluator(Evaluator):
+    """Evaluador para modelos locales de Hugging Face como Qwen."""
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        logging.info(f"Cargando modelo local: {model_name}...")
+        # Cuantización en 4-bit  para reducir el consumo de VRAM
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16
+        )
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            quantization_config=bnb_config,
+            device_map="auto" # Distribuye el modelo en las GPUs disponibles
+        )
+        logging.info("Modelo Student cargado y configurado.")
+
+    def predict(self, prompt: str) -> Dict[str, Any]:
+        messages = [{"role": "user", "content": prompt}]
+        text_input = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        model_inputs = self.tokenizer([text_input], return_tensors="pt").to(self.model.device)
+        
+        with torch.no_grad(): # Desactiva el cálculo de gradientes para acelerar la inferencia
+            generated_ids = self.model.generate(**model_inputs, max_new_tokens=20, do_sample=False)
+        
+        # Decodificamos solo los tokens generados, no el prompt de entrada
+        response_text = self.tokenizer.batch_decode(generated_ids[:, model_inputs.input_ids.shape[1]:], skip_special_tokens=True)[0]
+        
+        return {
+            'predicted_score': parse_score_from_string(response_text),
+            'full_response': response_text
+        }
+
+class TeacherEvaluator(Evaluator):
+    """Evaluador para modelos de API como Gemini."""
+    def __init__(self, model_name: str, delay_sec: float = 12.0):
+        super().__init__(model_name)
+        logging.info(f"Configurando cliente de API para: {model_name}")
+        dotenv.load_dotenv()
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("La variable de entorno GEMINI_API_KEY no está configurada.")
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel(model_name)
+        self.delay_sec = delay_sec
+
+    def predict(self, prompt: str) -> Dict[str, Any]:
+        try:
+            response = self.model.generate_content(prompt)
+            response_text = response.text
+            predicted_score = parse_score_from_string(response_text)
+        except Exception as e:
+            logging.error(f"Error de API: {e}")
+            response_text = f"API_ERROR: {e}"
+            predicted_score = None
+        
+        # Respetar los límites de la API
+        time.sleep(self.delay_sec)
+        
+        return {
+            'predicted_score': predicted_score,
+            'full_response': response_text
+        }
+
+# --- 3. PIPELINE PRINCIPAL ---
 
 def main():
-    dotenv.load_dotenv() 
     parser = argparse.ArgumentParser(description="Ejecutar evaluación Zero-Shot para un modelo.")
-    parser.add_argument("model_type", choices=['student', 'teacher'], help="El tipo de modelo a evaluar ('student' o 'teacher').")
+    parser.add_argument("model_type", choices=['student', 'teacher'], help="El tipo de modelo a evaluar.")
     args = parser.parse_args()
 
-    print(f"--- Iniciando evaluación para el modelo: {args.model_type.upper()} ---")
-    
-    test_dataset = load_dataset(TEST_DATASET_PATH)
-    if test_dataset.empty:
+    try:
+        cfg = load_config()
+        project_root = Path(__file__).resolve().parent.parent
+        cfg['data_paths']['gold_standard']['test_jsonl'] = project_root / cfg['data_paths']['gold_standard']['test_jsonl']
+        cfg['output_paths']['eval_results']['student_baseline'] = project_root / cfg['output_paths']['eval_results']['student_baseline']
+        cfg['output_paths']['eval_results']['teacher_candidate'] = project_root / cfg['output_paths']['eval_results']['teacher_candidate']
+    except (FileNotFoundError, KeyError) as e:
+        logging.error(f"Error de configuración: {e}")
         return
 
+    logging.info(f"--- Iniciando evaluación para el modelo: {args.model_type.upper()} ---")
+    
+    # Cargamos el dataset de test curado
+    test_dataset_path = cfg['data_paths']['gold_standard']['test_jsonl']
+    try:
+        test_dataset = pd.read_json(test_dataset_path, lines=True)
+        logging.info(f"Dataset de test cargado desde '{test_dataset_path}' ({len(test_dataset)} filas).")
+    except FileNotFoundError:
+        logging.error(f"No se encontró el archivo de dataset en {test_dataset_path}")
+        return
+
+    # Selección polimórfica del evaluador
     if args.model_type == 'student':
-        model, tokenizer = load_model_and_tokenizer(STUDENT_MODEL_NAME)
-        results_df = run_student_evaluation(model, tokenizer, test_dataset)
-        output_path = STUDENT_BASELINE_RESULTS_PATH
-    elif args.model_type == 'teacher':
-        results_df = run_teacher_evaluation(test_dataset)
-        output_path = TEACHER_RESULTS_PATH
+        evaluator = StudentEvaluator(cfg['student_model']['base_model_name'])
+        output_path = cfg['output_paths']['eval_results']['student_baseline']
+    else: # teacher
+        evaluator = TeacherEvaluator(
+            cfg['teacher_model']['model_name'],
+            delay_sec=cfg['silver_set_generation'].get('delay_between_requests_sec', 12.0)
+        )
+        output_path = cfg['output_paths']['eval_results']['teacher_candidate']
     
-    # El resultado final del script son dos artefactos:
-    # 1. El archivo CSV guardado en la ruta 'output_path'.
-    print(f"\nGuardando resultados detallados en: {output_path}")
+    # Ejecución de la evaluación
+    results_df = evaluator.evaluate(test_dataset)
+    
+    # Guardado de resultados y reporte de métricas
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(output_path, index=False)
+    logging.info(f"Resultados detallados guardados en: {output_path}")
     
-    # 2. El resumen de métricas impreso en la consola.
-    calculate_and_print_metrics(results_df, model_type=args.model_type)
+    calculate_and_log_metrics(results_df, model_name=evaluator.model_name)
     
-    print("\nEvaluación completada con éxito.")
+    logging.info("Evaluación completada con éxito.")
 
 if __name__ == "__main__":
     main()

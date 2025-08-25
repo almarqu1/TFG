@@ -1,14 +1,18 @@
 # =================================================================
-# FICHERO DE CONFIGURACIÓN GLOBAL
+# FICHERO DE CONFIGURACIÓN GLOBAL DEL PROYECTO DISTILMATCH
+# Centraliza todas las rutas, hiperparámetros y constantes para
+# garantizar la reproducibilidad y facilitar la experimentación.
 # =================================================================
 
 # --- Parámetros Globales ---
-global_seed: 42  # Semilla para garantizar la reproducibilidad en todo el proyecto
+global_seed: 42  # Semilla para todas las operaciones aleatorias (división de datos, muestreo).
+                 # Fundamental para garantizar que los experimentos sean 100% reproducibles.
 
-# --- Rutas a los Datos (Data Paths) ---
-# Organizadas por etapas del pipeline de datos
+# --- Rutas del Pipeline de Datos (MLOps Staging) ---
+# Estructura inspirada en las mejores prácticas de MLOps, separando los datos por su etapa
+# de procesamiento para mantener un flujo de trabajo claro y versionable con DVC.
 data_paths:
-  # 00 - Datos Crudos (Inputs para el pre-procesamiento)
+  # 00_raw: Datos originales, tal como se reciben. Son de solo lectura.
   raw:
     offers: "data/00_raw/datasetJobs2/postings.csv"
     job_skills: "data/00_raw/datasetJobs2/jobs/job_skills.csv"
@@ -16,97 +20,80 @@ data_paths:
     job_industries: "data/00_raw/datasetJobs2/jobs/job_industries.csv"
     industries_map: "data/00_raw/datasetJobs2/mappings/industries.csv"
     cvs: "data/00_raw/datasetCV2/resume_data.csv"
-  cvs_processed_csv: "data/01_processed/cvs_processed.csv"       
-  offers_processed_csv: "data/01_processed/offers_processed.csv" 
-  unlabeled_pairs_csv: "data/01_processed/unlabeled_pairs.csv"   
   
-  # 01 - Datos Procesados (Outputs del pre-procesamiento)
+  # 01_processed: Datos limpios y enriquecidos, listos para ser consumidos por los scripts.
   processed:
     offers: "data/01_processed/offers_processed.csv"
     cvs: "data/01_processed/cvs_processed.csv"
+    # Este archivo contiene los pares aleatorios CV-Oferta que alimentarán al Teacher.
+    unlabeled_pairs: "data/01_processed/unlabeled_pairs.csv"   
   
-  # 02 - Conjuntos de Test y Anotación
-  test_sets:
-    pairs_to_annotate: "data/02_test_sets/test_set_pairs_to_annotate.csv"
-    prompt_validation_set: "data/02_test_sets/prompt_validation_set.csv"
-  
-  # 03 - Soft Labels generados por el Teacher
+  # 02_intermediate: Artefactos generados que sirven como 'pegamento' entre etapas.
   intermediate:
-    soft_labels: "data/02_intermediate/soft_labels.jsonl"
+    # El "Silver Set": un gran corpus de datos etiquetados por el Teacher (soft labels)
+    # que se usará para el fine-tuning del modelo Student.
+    silver_standard_train: "data/02_intermediate/silver_standard_train.jsonl"
   
-  # 04 - Gold Standard y Divisiones para Evaluación 
+  # 03_gold_standard: La "verdad absoluta" del proyecto. Curado manualmente por el experto.
   gold_standard:
-    # El archivo de entrada curado por el experto humano
-    full: "data/03_gold_standard/gold_standard_full.csv" 
+    # El archivo de entrada completo, producto de la herramienta de curación.
+    full_curated_csv: "data/03_gold_standard/gold_standard_full.csv" 
     
-    # Los archivos de salida generados por el script prepare_evaluation_sets.py
+    # Artefactos generados por `prepare_evaluation_sets.py` para entrenamiento y test.
     train_csv: "data/03_gold_standard/gold_standard_train.csv" 
     test_csv: "data/03_gold_standard/gold_standard_test.csv" 
     train_jsonl: "data/03_gold_standard/gold_standard_train.jsonl" 
     test_jsonl: "data/03_gold_standard/gold_standard_test.jsonl" 
 
-
 # --- Parámetros para la División de Datos --- 
 # Usado por `scripts/prepare_evaluation_sets.py`
 data_split:
-  test_size: 0.20 # Proporción del Golden Set que se usará como conjunto de test sagrado
-  stratify_column: 'category' # Columna para la división estratificada
+  test_size: 0.20 # Proporción del Golden Set que se reserva como conjunto de test "sagrado".
+  stratify_column: 'category' # Asegura que la distribución de categorías sea igual en train y test.
 
 # --- Rutas a los Artefactos de Salida ---
-# Reportes, gráficos, etc.
 output_paths:
   reports: "outputs/reports"
-  
+  # Archivos CSV detallados generados durante la evaluación para un análisis de errores posterior.
   eval_results:
-    prompt_experiment_results: "outputs/reports/prompt_experiment_raw_results.csv"
     student_baseline: "outputs/reports/student_baseline_results.csv"
     teacher_candidate: "outputs/reports/teacher_results.csv"
 
-
-# --- Parámetros para la Creación del Set de Test ---
-# Usado por `scripts/create_test_set.py`
-test_set_creation:
-  num_pairs: 360  # Número total de pares a generar
-
-# --- Parámetros del Modelo Teacher (Gemini 2.5 Pro) ---
-# Usado por `scripts/run_prompt_experiments.py` y `scripts/generate_soft_labels.py`
+# --- Parámetros de Modelos y Prompts ---
 teacher_model:
-  model_name: "gemini-2.5-pro" 
-  temperature: 0.2 # Temperatura baja para respuestas consistentes y deterministas
-  prompt_id: "P-07_zero_shot_gemini_friendly"  # ID del prompt a usar para el Teacher
+  # IMPORTANTE: Usar el ID oficial del modelo del proveedor para reproducibilidad.
+  # Ejemplo: "gemini-1.5-pro-latest"
+  model_name: "gemini-1.5-pro-latest" # <-- REVISAR Y ACTUALIZAR
+  # Temperatura baja para que el Teacher sea lo más determinista y consistente posible.
+  # En la fase de generación de datos, no buscamos creatividad, sino precisión.
+  temperature: 0.2
+  prompt_id: "P-07_zero_shot_gemini_friendly"
 
-# --- Parámetros del Modelo Student (Qwen) ---
-# Usado por `src/train.py`, `evaluate_zero_shot.py`, etc.
 student_model:
-  # Nombre del modelo base a cargar desde Hugging Face
-  base_model_name: "Qwen/Qwen3-4B-Instruct-2507" 
-  # ID del prompt a usar para evaluar y tunear el Student
+  # IMPORTANTE: Usar el ID oficial del modelo de Hugging Face.
+  # Ejemplo: "Qwen/Qwen2-7B-Instruct"
+  base_model_name: "Qwen/Qwen2-7B-Instruct" # <-- REVISAR Y ACTUALIZAR
   prompt_id: "S-03_student_silver_bullet" 
-  # Ruta donde se guardará el modelo entrenado
-  output_dir: "models/distilmatch_qwen_lora_v1" # Asegúrate que coincide con tu plan
+  output_dir: "models/distilmatch_qwen_lora_v1"
 
-# --- Parámetros de Entrenamiento ---
-# Usado por `src/train.py`
+# --- Parámetros de los Pasos del Pipeline ---
+silver_set_generation:
+  # Se toma el valor de data_paths.intermediate.silver_standard_train para consistencia.
+  num_samples_to_generate: 9000
+  # Delay entre llamadas a la API. Crucial para no exceder los límites de la cuenta.
+  # 12 para Free Tier (5 RPM), ~0.5 para Paid Tier (>120 RPM).
+  delay_between_requests_sec: 0.0 # Ajustado para la versión con multiprocessing
+  max_words_per_field: 600 # Trunca los textos de CV y oferta para evitar exceder el límite de contexto del modelo.
+
 training:
   num_epochs: 3
   learning_rate: 2e-5
   batch_size: 16
-  # Proporción del dataset de entrenamiento que se usará para validación
+  # Reservamos una pequeña parte del dataset de entrenamiento para monitorizar el sobreajuste.
   validation_split_size: 0.1 
 
-# --- Parámetros de Active Learning ---
-# Usado por `src/al_strategy.py`
 active_learning:
-  # Umbral de incertidumbre para la selección de muestras (ej. scores entre 50 y 70)
+  # El rango de scores donde el modelo es más "dudoso", ideal para que un humano anote.
   uncertainty_threshold_low: 50.0
   uncertainty_threshold_high: 70.0
-  # Número de muestras a seleccionar en cada ciclo de AL
-  selection_batch_size: 100
-
-silver_set_generation:
-  output_jsonl_path: "data/02_intermediate/silver_standard_train.jsonl"
-  num_samples_to_generate: 9000  
-  # Delay en segundos entre peticiones. 12 para Free Tier (5 RPM), 0.5 para Paid Tier (150 RPM)
-  delay_between_requests_sec: 0.0
-  # Límite de palabras por campo para evitar errores de contexto largo
-  max_words_per_field: 600 
+  selection_batch_size: 100 # Número de muestras a anotar en cada ciclo.

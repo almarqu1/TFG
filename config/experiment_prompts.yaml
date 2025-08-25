@@ -1,19 +1,34 @@
+# =================================================================
+# CATÁLOGO DE PROMPTS EXPERIMENTALES
+# Registro de todas las iteraciones de prompts realizadas durante el proyecto.
+# Cada entrada documenta el propósito, las técnicas y el estado de un prompt,
+# sirviendo como un logbook para la experimentación en ingeniería de prompts.
+# =================================================================
+
+# --- Prompts para el Modelo Teacher (Fase de Exploración y Selección) ---
+
 P-01_zero_shot:
-  description: "Control (Baseline): Zero-shot sin CoT."
+  status: "archived" # Estado del prompt: final, archived, experimental
+  description: "Control (Baseline): Zero-shot sin CoT. Simplemente pide el score."
+  hypothesis: "Un prompt directo sin ejemplos ni razonamiento previo probablemente tendrá un rendimiento bajo, estableciendo una línea base a superar."
   path: "report/prompts/P-01_zero_shot.txt"
   techniques:
     - zero-shot
     - json-output
-  
+
 P-02_few_shot:
-  description: "Few-shot sin CoT."
+  status: "archived"
+  description: "Few-shot sin CoT. Proporciona 2-3 ejemplos de CV-Oferta con su score esperado."
+  hypothesis: "Los ejemplos (few-shot) mejorarán significativamente la consistencia y precisión del modelo al anclar su comprensión de la escala de puntuación."
   path: "report/prompts/P-02_few_shot.txt"
   techniques:
     - few-shot
     - json-output
 
-P-03-cot_zero_shot:
-  description: "Zero-shot con Chain-of-Thought."
+P-03_cot_zero_shot:
+  status: "archived"
+  description: "Zero-shot con Chain-of-Thought (CoT). Pide al modelo que 'piense paso a paso' antes de dar el score."
+  hypothesis: "Forzar al modelo a razonar explícitamente (CoT) mejorará la calidad de la evaluación, especialmente en casos ambiguos."
   path: "report/prompts/P-03_cot_zero_shot.txt"
   techniques:
     - zero-shot
@@ -21,7 +36,9 @@ P-03-cot_zero_shot:
     - json-output
 
 P-04_cot_few_shot:
-  description: "Combinación fuerte: Few-shot con Chain-of-Thought."
+  status: "archived"
+  description: "Combinación fuerte: Few-shot con CoT. Proporciona ejemplos que incluyen el razonamiento."
+  hypothesis: "Esta es la combinación teóricamente más potente. Los ejemplos no solo muestran el qué (score) sino el cómo (razonamiento), lo que debería maximizar el rendimiento."
   path: "report/prompts/P-04_cot_few_shot.txt"
   techniques:
     - few-shot
@@ -29,14 +46,19 @@ P-04_cot_few_shot:
     - json-output
 
 P-05_pragmatic_zero_shot:
-  description: "Zero-shot con enfoque 'cazatalentos'."
+  status: "archived"
+  description: "Zero-shot con enfoque 'cazatalentos', usando la rúbrica de 4 categorías."
+  hypothesis: "Alinear el prompt con la rúbrica pragmática de 4 categorías (MUST INTERVIEW, etc.) reducirá la ambigüedad y mejorará la alineación con el juicio humano."
   path: "report/prompts/P-05_pragmatic_zero_shot.txt"
   techniques:
     - zero-shot
+    - persona-based # Se le pide que actúe como un "senior tech recruiter"
     - json-output
 
 P-06_assisted_curation:
-  description: "Co-pilot mode: Proporciona análisis estructurado para asistir con la creación del Golden Set."
+  status: "tool" # Este prompt no es para evaluación, sino una herramienta de apoyo.
+  description: "Co-pilot mode: Proporciona un análisis estructurado para asistir en la creación del Golden Set."
+  hypothesis: "El LLM puede actuar como un asistente para el anotador humano, acelerando la curación del Golden Set al proponer análisis iniciales."
   path: "report/prompts/P-06_assisted_curation.txt"
   techniques:
     - zero-shot
@@ -44,25 +66,34 @@ P-06_assisted_curation:
     - json-output
     - co-pilot
 
+P-07_zero_shot_gemini_friendly:
+  status: "final-teacher" # Designado como el prompt final para el Teacher.
+  description: "Prompt final, optimizado para Gemini. Es más conciso, prioriza el input y utiliza la rúbrica pragmática."
+  hypothesis: "Una estructura de prompt más limpia y directa, adaptada a las 'preferencias' de Gemini (input-first), junto con un system prompt claro, dará el mejor rendimiento zero-shot."
+  path: "report/prompts/P-07_gemini_friendly.yaml"
+  techniques:
+    - zero-shot
+    - persona-based
+    - system-instruction
+    - json-output
+
+# --- Prompts para el Modelo Student (Fase de Fine-Tuning y Evaluación) ---
+
 S-01_student_evaluation:
-  description: "Prompt simple y directo para el fine-tuning y evaluación del modelo Student. Espera solo un score como respuesta."
+  status: "deprecated" # Reemplazado por S-03 por ser más robusto.
+  description: "Prompt simple y directo para el fine-tuning y evaluación del modelo Student."
+  hypothesis: "Un prompt mínimo es suficiente si el modelo se va a especializar mediante fine-tuning."
   path: "report/prompts/S-01_student_evaluation.txt"
   techniques:
     - zero-shot
     - simple-output
 
 S-03_student_silver_bullet:
-  description: "Prompt ultra-restrictivo para forzar al modelo a dar únicamente el score."
+  status: "final-student" # Designado como el prompt final para el Student.
+  description: "Prompt ultra-restrictivo que fuerza al modelo a dar únicamente el score numérico."
+  hypothesis: "Para la evaluación y el fine-tuning, es crucial que la salida sea perfectamente parseable. Un prompt muy restrictivo minimiza los errores de formato y acelera el pipeline."
   path: "report/prompts/S-03_student_silver_bullet.txt"
   techniques:
     - zero-shot
     - system-persona
     - constrained-output
-
-# config/experiment_prompts.yaml
-P-07_zero_shot_gemini_friendly:
-  path: "report/prompts/P-07_gemini_friendly.yaml"
-  description: "Prompt optimizado para Gemini, más conciso y con formato input-first."
-  techniques:
-    - zero-shot
-    - json-output

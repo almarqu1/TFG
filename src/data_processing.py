@@ -1,40 +1,63 @@
+# TFG_DistilMatch/src/data_processing.py
+
+"""
+Pipeline de Pre-procesamiento y Enriquecimiento de Datos.
+
+Este script es el primer paso del pipeline de MLOps. Su responsabilidad es
+transformar los datos crudos (CSV de ofertas y CVs) en datasets limpios,
+estructurados y, lo más importante, enriquecidos.
+
+Las transformaciones clave incluyen:
+- Cálculo de la experiencia laboral total en años (`total_experience_years`).
+- Creación de un historial laboral formateado y legible (`formatted_work_history`).
+- Fusión de datos dispersos (skills, industrias) en listas consolidadas.
+"""
 import pandas as pd
-import argparse
 import logging
 from pathlib import Path
 from datetime import datetime
-import ast  # Para la evaluación segura de literales
-from dateutil.parser import parse as parse_date  # Parser de fechas flexible
+import ast
+from dateutil.parser import parse as parse_date
+import sys
 
-# Configuración del logging para el seguimiento del pipeline
+# Añadimos la raíz del proyecto para poder importar desde src/utils
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
+from src.utils import load_config # ¡Importamos nuestra función centralizada!
+
+# --- 1. CONFIGURACIÓN Y CONSTANTES ---
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# --- CONSTANTES GLOBALES ---
-
-# Fecha de corte estática para los cálculos de experiencia.
+# Fecha de corte estática para los cálculos de experiencia. Se usa para
+# calcular la duración de los trabajos "actuales".
 DATA_CUTOFF_DATE = datetime(2024, 1, 1)
 
 # Alias para términos que indican que un trabajo es el actual.
 CURRENT_JOB_ALIASES = {'current', 'present', 'ongoing', 'till date', 'none', ''}
 
+# --- 2. FUNCIONES DE PROCESAMIENTO DE CVS ---
 
-# --- FUNCIONES MODULARES DE PROCESAMIENTO ---
-
-def _format_work_history(row):
+def _format_work_history(row: pd.Series) -> str:
     """
     Combina la información de puestos, fechas y habilidades en un único string formateado.
+    Es una de las características enriquecidas clave del pipeline.
     """
     try:
+        # Usamos ast.literal_eval para convertir de forma segura el string "[...]" a una lista Python.
         positions = ast.literal_eval(row['positions'])
         start_dates = ast.literal_eval(row['start_dates'])
         end_dates = ast.literal_eval(row['end_dates'])
         skills_per_job = ast.literal_eval(row['related_skils_in_job'])
-    except (ValueError, SyntaxError):
+    except (ValueError, SyntaxError, TypeError):
+        # Si los datos no son listas válidas, devolvemos un string vacío.
         return ""
 
     history_entries = []
     for pos, start, end, skills in zip(positions, start_dates, end_dates, skills_per_job):
-        end_str = str(end).strip().title() if str(end).lower().strip() not in CURRENT_JOB_ALIASES else "Present"
+        # Normalizamos el texto de la fecha de fin para que sea consistente.
+        end_str = "Present" if str(end).lower().strip() in CURRENT_JOB_ALIASES else str(end).strip().title()
         
         entry = f"- {pos} ({start} - {end_str})"
         if skills and isinstance(skills, list):
@@ -45,21 +68,17 @@ def _format_work_history(row):
     return "\n\n".join(history_entries)
 
 
-def _calculate_experience_for_row(row):
+def _calculate_experience_for_row(row: pd.Series) -> float:
     """
-    Calcula la experiencia total para una única fila de candidato, con una comprobación de sanidad.
+    Calcula la experiencia total en años para un candidato, aplicando una lógica de
+    "capping" para evitar valores inflados por datos inconsistentes.
     """
     try:
-        start_dates_str = row['start_dates']
-        end_dates_str = row['end_dates']
-        
-        if not isinstance(start_dates_str, str) or not isinstance(end_dates_str, str):
-            return 0.0
-
-        start_dates = ast.literal_eval(start_dates_str)
-        end_dates = ast.literal_eval(end_dates_str)
-
-    except (ValueError, SyntaxError):
+        start_dates = ast.literal_eval(row['start_dates'])
+        end_dates = ast.literal_eval(row['end_dates'])
+        if not (isinstance(start_dates, list) and isinstance(end_dates, list)):
+             return 0.0
+    except (ValueError, SyntaxError, TypeError):
         logging.warning(f"No se pudieron parsear las listas de fechas para el candidato índice {row.name}. Se asigna 0 experiencia.")
         return 0.0
 
@@ -69,42 +88,64 @@ def _calculate_experience_for_row(row):
         try:
             start_dt = parse_date(start_str)
             parsed_start_dates.append(start_dt)
-
-            if str(end_str).lower().strip() in CURRENT_JOB_ALIASES:
-                end_dt = DATA_CUTOFF_DATE
-            else:
-                end_dt = parse_date(str(end_str))
+            end_dt = DATA_CUTOFF_DATE if str(end_str).lower().strip() in CURRENT_JOB_ALIASES else parse_date(str(end_str))
             
             duration = (end_dt - start_dt).days
             if duration > 0:
                 total_experience_days += duration
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, AttributeError):
+            # Ignora pares de fechas mal formados.
             continue
-
+    
     if not parsed_start_dates:
         return 0.0
 
+    # Lógica de capping: la experiencia total no puede ser mayor que el tiempo
+    # transcurrido desde el inicio del primer trabajo. Esto corrige solapamientos.
     first_job_start_date = min(parsed_start_dates)
     max_possible_experience_days = (DATA_CUTOFF_DATE - first_job_start_date).days
-
     capped_experience_days = min(total_experience_days, max_possible_experience_days)
     
     return round(max(0, capped_experience_days) / 365.25, 2)
 
-
-def process_offers(offers_path, job_skills_path, skills_map_path, job_industries_path, industries_map_path):
-    """
-    Carga, fusiona y limpia los datos de las ofertas de trabajo.
-    """
-    logging.info("Iniciando el procesamiento de ofertas...")
-    
+def process_cvs(cvs_path: Path) -> pd.DataFrame:
+    """Orquesta el procesamiento y enriquecimiento completo de los datos de CVs."""
+    logging.info("Iniciando el procesamiento de CVs...")
     try:
-        usecols_offers = ['job_id', 'title', 'description', 'formatted_experience_level', 'formatted_work_type', 'remote_allowed']
-        offers_df = pd.read_csv(offers_path, usecols=usecols_offers, dtype={'job_id': str})
-        job_skills_df = pd.read_csv(job_skills_path, dtype={'job_id': str})
-        skills_map_df = pd.read_csv(skills_map_path)
-        job_industries_df = pd.read_csv(job_industries_path, dtype={'job_id': str})
-        industries_map_df = pd.read_csv(industries_map_path)
+        # Leemos solo las columnas que vamos a usar para optimizar memoria.
+        cvs_df = pd.read_csv(cvs_path)
+    except FileNotFoundError:
+        logging.error(f"Archivo de CVs no encontrado en: {cvs_path}")
+        raise
+
+    logging.info("Generando características enriquecidas: 'total_experience_years' y 'formatted_work_history'...")
+    cvs_df['total_experience_years'] = cvs_df.apply(_calculate_experience_for_row, axis=1)
+    cvs_df['formatted_work_history'] = cvs_df.apply(_format_work_history, axis=1)
+    
+    logging.info("Generando IDs únicos y limpiando columnas de origen redundantes...")
+    cvs_df.reset_index(inplace=True)
+    cvs_df.rename(columns={'index': 'candidate_id'}, inplace=True)
+    cvs_df['candidate_id'] = 'cand_' + cvs_df['candidate_id'].astype(str)
+    
+    source_cols_to_drop = ['positions', 'start_dates', 'end_dates', 'related_skils_in_job', 'responsibilities']
+    cvs_df.drop(columns=[col for col in source_cols_to_drop if col in cvs_df.columns], inplace=True)
+
+    # Reordenamos las columnas para mayor claridad en el CSV de salida.
+    first_cols = ['candidate_id', 'total_experience_years', 'formatted_work_history']
+    other_cols = [col for col in cvs_df.columns if col not in first_cols]
+    return cvs_df[first_cols + other_cols]
+
+# --- 3. FUNCIONES DE PROCESAMIENTO DE OFERTAS ---
+
+def process_offers(paths: dict) -> pd.DataFrame:
+    """Carga, fusiona y limpia los datos de las ofertas de trabajo."""
+    logging.info("Iniciando el procesamiento de ofertas...")
+    try:
+        offers_df = pd.read_csv(paths['offers'], dtype={'job_id': str})
+        job_skills_df = pd.read_csv(paths['job_skills'], dtype={'job_id': str})
+        skills_map_df = pd.read_csv(paths['skills_map'])
+        job_industries_df = pd.read_csv(paths['job_industries'], dtype={'job_id': str})
+        industries_map_df = pd.read_csv(paths['industries_map'])
     except FileNotFoundError as e:
         logging.error(f"Archivo no encontrado: {e.filename}. Abortando.")
         raise
@@ -115,94 +156,38 @@ def process_offers(offers_path, job_skills_path, skills_map_path, job_industries
     
     offers_processed = offers_df.merge(skills_agg, on='job_id', how='left').merge(industries_agg, on='job_id', how='left')
     
+    # Aseguramos que las columnas de listas vacías sean listas y no NaN.
     offers_processed['skills_list'] = offers_processed['skills_list'].apply(lambda x: x if isinstance(x, list) else [])
     offers_processed['industries_list'] = offers_processed['industries_list'].apply(lambda x: x if isinstance(x, list) else [])
-    
-    logging.info("Optimizando tipos de datos...")
-    for col in ['formatted_experience_level', 'formatted_work_type']:
-        offers_processed[col] = offers_processed[col].astype('category')
         
     return offers_processed
 
-def process_cvs(cvs_path):
-    """
-    Carga y procesa los datos de los CVs, creando columnas enriquecidas y
-    eliminando las columnas de origen redundantes.
-    """
-    logging.info("Iniciando el procesamiento de CVs...")
-    
-    try:
-        usecols_cvs = [
-            'career_objective', 'positions', 'start_dates', 'end_dates', 'related_skils_in_job',
-            'skills', 'degree_names', 'responsibilities', 
-            'major_field_of_studies', 'educational_institution_name', 
-            'professional_company_names', 'extra_curricular_activity_types',
-            'languages', 'certification_skills'          
-        ]
-        cvs_df = pd.read_csv(cvs_path, usecols=usecols_cvs)
-    except (FileNotFoundError, ValueError) as e:
-        logging.error(f"Error al leer el archivo o las columnas de CVs. Asegúrate de que el archivo y las columnas existen. Error: {e}")
-        raise
+# --- 4. ORQUESTADOR PRINCIPAL ---
 
-    logging.info("Calculando la experiencia laboral total y generando historial formateado...")
-    cvs_df['total_experience_years'] = cvs_df.apply(_calculate_experience_for_row, axis=1)
-    cvs_df['formatted_work_history'] = cvs_df.apply(_format_work_history, axis=1)
-    
-    logging.info("Generando IDs únicos y limpiando columnas redundantes...")
-    cvs_df.reset_index(inplace=True)
-    cvs_df.rename(columns={'index': 'candidate_id'}, inplace=True)
-    cvs_df['candidate_id'] = 'cand_' + cvs_df['candidate_id'].astype(str)
-    
-    # Estas columnas han cumplido su propósito y ahora son redundantes.
-    source_cols_to_drop = ['positions', 'start_dates', 'end_dates', 'related_skils_in_job']
-    cvs_df.drop(columns=source_cols_to_drop, inplace=True)
-
-    # Definir el orden final de las columnas para mayor claridad en el archivo de salida.
-    # Colocar las columnas generadas y de identificación al principio.
-    first_cols = ['candidate_id', 'total_experience_years', 'formatted_work_history']
-    other_cols = [col for col in cvs_df.columns if col not in first_cols]
-    final_order = first_cols + other_cols
-    
-    cvs_processed = cvs_df[final_order]
-    
-    return cvs_processed
-
-# --- ORQUESTADOR PRINCIPAL ---
-
-def main(args):
+def main():
+    """Punto de entrada principal del script. Carga la configuración y ejecuta los pipelines."""
     logging.info("Iniciando el pipeline de pre-procesamiento de datos.")
     
-    Path(args.offers_output).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.cvs_output).parent.mkdir(parents=True, exist_ok=True)
+    config = load_config()
+    raw_paths = config['data_paths']['raw']
+    processed_paths = config['data_paths']['processed']
+    
+    # Construir rutas absolutas
+    paths_in = {key: PROJECT_ROOT / path for key, path in raw_paths.items()}
+    path_out_offers = PROJECT_ROOT / processed_paths['offers']
+    path_out_cvs = PROJECT_ROOT / processed_paths['cvs']
+    
+    path_out_offers.parent.mkdir(parents=True, exist_ok=True)
 
-    offers_processed = process_offers(args.offers_input, args.job_skills_input, args.skills_map_input, args.job_industries_input, args.industries_map_input)
-    offers_processed.to_csv(args.offers_output, index=False)
-    logging.info(f"Ofertas procesadas y guardadas en: {args.offers_output}")
+    offers_processed = process_offers(paths_in)
+    offers_processed.to_csv(path_out_offers, index=False)
+    logging.info(f"Ofertas procesadas y guardadas en: {path_out_offers}")
 
-    cvs_processed = process_cvs(args.cvs_input)
-    cvs_processed.to_csv(args.cvs_output, index=False)
-    logging.info(f"CVs procesados (con esquema limpio y enriquecido) y guardados en: {args.cvs_output}")
+    cvs_processed = process_cvs(paths_in['cvs'])
+    cvs_processed.to_csv(path_out_cvs, index=False)
+    logging.info(f"CVs procesados y guardados en: {path_out_cvs}")
     
     logging.info("¡Pre-procesamiento completado con éxito!")
 
-# ==============================================================================
-#  PUNTO DE ENTRADA DEL SCRIPT
-# ==============================================================================
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Pre-procesa los datos crudos de ofertas y CVs.")
-    
-    project_root = Path(__file__).resolve().parent.parent
-    
-    parser.add_argument('--offers_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/postings.csv'))
-    parser.add_argument('--job_skills_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/jobs/job_skills.csv'))
-    parser.add_argument('--skills_map_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/mappings/skills.csv'))
-    parser.add_argument('--job_industries_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/jobs/job_industries.csv'))
-    parser.add_argument('--industries_map_input', type=str, default=str(project_root / 'data/00_raw/datasetJobs2/mappings/industries.csv'))
-    parser.add_argument('--cvs_input', type=str, default=str(project_root / 'data/00_raw/datasetCV2/resume_data.csv'))
-    
-    parser.add_argument('--offers_output', type=str, default=str(project_root / 'data/01_processed/offers_processed.csv'))
-    parser.add_argument('--cvs_output', type=str, default=str(project_root / 'data/01_processed/cvs_processed.csv'))
-
-    args = parser.parse_args()
-    main(args)
+    main()
