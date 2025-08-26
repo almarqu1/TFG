@@ -95,3 +95,33 @@ active_learning:
   uncertainty_threshold_low: 50.0
   uncertainty_threshold_high: 70.0
   selection_batch_size: 100 # Número de muestras a anotar en cada ciclo.
+
+  # --- GESTIÓN DE EXPERIMENTOS ---
+# Cada entrada aquí define un ciclo completo de entrenamiento y evaluación.
+# Esto nos permite comparar diferentes enfoques de forma limpia y reproducible.
+experiments:
+
+  score_only_v1:
+    description: "Fine-tuning solo para predecir el score numérico. Sufrió colapso de modo."
+    training:
+      enabled: true # Permite saltarse el re-entrenamiento si ya está hecho
+      num_epochs: 3
+      learning_rate: 2e-5
+      batch_size: 8 # Ajustado a un valor más común para LoRA
+      validation_split_size: 0.1
+      run_name: "distilmatch_v1_score_only" # Nombre para wandb
+    output_dir: "distilmatch_qwen_lora_v1_score_only" # Se guardará dentro de output_paths.models_dir
+    evaluation_output_csv: "eval_results_v1_score_only.csv" # Se guardará en output_paths.reports
+
+  
+  reasoning_v2:
+    description: "Explanation-Tuning: Se entrena para generar el razonamiento completo."
+    training:
+      enabled: true
+      num_epochs: 3
+      learning_rate: 2e-5
+      batch_size: 8
+      validation_split_size: 0.1
+      run_name: "distilmatch_v2_reasoning"
+    output_dir: "distilmatch_qwen_lora_v2_reasoning"
+    evaluation_output_csv: "eval_results_v2_reasoning.csv"

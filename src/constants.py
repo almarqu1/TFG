@@ -19,6 +19,10 @@ CATEGORY_TO_SCORE = {
     '🔴 NO FIT': 15.0,
 }
 
+# Mapeos inversos para convertir scores numéricos de vuelta a categorías.
+SCORE_TO_CATEGORY = {v: k for k, v in CATEGORY_TO_SCORE.items()}
+
+
 # Define el orden explícito de las categorías.
 # Este orden se utiliza para:
 # 1. Asegurar una presentación consistente en la interfaz de usuario (Streamlit).
