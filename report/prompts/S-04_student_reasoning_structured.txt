@@ -1,0 +1,24 @@
+
+
+As an expert HR analyst, provide a step-by-step analysis of the compatibility between the following CV and Job Offer. 
+[CV]
+{cv}
+
+[JOB_OFFER]
+{job_description}
+
+Your entire response must follow the structure provided below. The awarded score must be between 1 and 100.
+
+[ANALYSIS]
+Strengths:
+- 
+
+Concerns and Gaps:
+- 
+
+Potential:
+- 
+
+Final Summary: 
+
+Score: 

@@ -97,31 +97,58 @@ active_learning:
   selection_batch_size: 100 # Número de muestras a anotar en cada ciclo.
 
   # --- GESTIÓN DE EXPERIMENTOS ---
-# Cada entrada aquí define un ciclo completo de entrenamiento y evaluación.
-# Esto nos permite comparar diferentes enfoques de forma limpia y reproducible.
 experiments:
-
-  score_only_v1:
-    description: "Fine-tuning solo para predecir el score numérico. Sufrió colapso de modo."
-    training:
-      enabled: true # Permite saltarse el re-entrenamiento si ya está hecho
+  # Experimento Base (fallido) - Lo mantenemos como referencia
+  v1_silver_unbalanced:
+    description: "Score-Only con Silver Set desequilibrado. Sirve como baseline de 'qué no hacer'."
+    dataset_path: "data/02_intermediate/silver_standard_train.jsonl"
+    training_params:
       num_epochs: 3
       learning_rate: 2e-5
-      batch_size: 8 # Ajustado a un valor más común para LoRA
-      validation_split_size: 0.1
-      run_name: "distilmatch_v1_score_only" # Nombre para wandb
-    output_dir: "distilmatch_qwen_lora_v1_score_only" # Se guardará dentro de output_paths.models_dir
-    evaluation_output_csv: "eval_results_v1_score_only.csv" # Se guardará en output_paths.reports
+      batch_size: 16
+    output_dir: "models/distilmatch_qwen_lora_v1"
+    run_name: "distilmatch_qwen_lora_v1"
 
-  
-  reasoning_v2:
-    description: "Explanation-Tuning: Se entrena para generar el razonamiento completo."
-    training:
-      enabled: true
-      num_epochs: 3
+  # Experimento con Golden Set (Calidad > Cantidad)
+  v2_gold_only:
+    description: "Fine-tuning directo solo con el Golden Set (train). Prueba de 'calidad sobre cantidad'."
+    dataset_path: "data/03_gold_standard/gold_standard_train.jsonl"
+    training_params:
+      num_epochs: 8 # Más épocas porque el dataset es pequeño
       learning_rate: 2e-5
-      batch_size: 8
-      validation_split_size: 0.1
-      run_name: "distilmatch_v2_reasoning"
-    output_dir: "distilmatch_qwen_lora_v2_reasoning"
-    evaluation_output_csv: "eval_results_v2_reasoning.csv"
+      batch_size: 4 # Batch size más pequeño
+    output_dir: "models/distilmatch_v2_gold_only"
+    run_name: "distilmatch_v2_gold_only"
+
+  # Experimento con Silver Set Balanceado (Cantidad con Calidad)
+  v3_silver_balanced:
+    description: "Knowledge Distillation con Silver Set balanceado. Prueba de 'cantidad con calidad'."
+    dataset_path: "data/02_intermediate/silver_standard_train_balanced.jsonl"
+    training_params:
+      num_epochs: 4 # Un poco más de épocas que el v1
+      learning_rate: 2e-5
+      batch_size: 16
+    output_dir: "models/distilmatch_v3_silver_balanced"
+    run_name: "distilmatch_v3_silver_balanced"
+
+  v4_silver_balanced_reasoning:
+      description: "KD con Silver Set balanceado, entrenado para generar el razonamiento completo."
+      dataset_path: "data/02_intermediate/silver_standard_train_balanced.jsonl"
+      prompt_id: "S-04_student_reasoning_structured"
+      training_params:
+        num_epochs: 4
+        learning_rate: 2e-5
+        batch_size: 8 # Usamos un batch size más pequeño porque el texto es más largo
+      output_dir: "models/distilmatch_v4_silver_balanced_reasoning"
+      run_name: "distilmatch_v4_silver_balanced_reasoning"
+
+  v5_silver_reasoning:
+      description: "KD con Silver Set desequilibrado, entrenado para generar el razonamiento completo."
+      dataset_path: "data/02_intermediate/silver_standard_train.jsonl"
+      prompt_id: "S-04_student_reasoning_structured"
+      training_params:
+        num_epochs: 4
+        learning_rate: 2e-5
+        batch_size: 8 # Usamos un batch size más pequeño porque el texto es más largo
+      output_dir: "models/distilmatch_v4_silver_balanced_reasoning"
+      run_name: "distilmatch_v4_silver_balanced_reasoning"

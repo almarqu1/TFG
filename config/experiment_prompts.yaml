@@ -97,3 +97,13 @@ S-03_student_silver_bullet:
     - zero-shot
     - system-persona
     - constrained-output
+
+S-04_student_reasoning_structured:
+  status: "experimental-v4"
+  description: "Prompt diseñado para el experimento de 'explanation-tuning'. Proporciona una plantilla estructurada para que el modelo la complete con su análisis detallado y el score final."
+  hypothesis: "Al forzar al modelo a 'rellenar los huecos' de una estructura predefinida que coincide con los datos de entrenamiento, se facilitará el aprendizaje del razonamiento, se mejorará la capacidad de ranking (Spearman) y se producirá una salida interpretable."
+  path: "report/prompts/S-04_student_reasoning_structured.txt"
+  techniques:
+    - zero-shot
+    - system-persona
+    - structured-completion
