@@ -9,7 +9,8 @@ from transformers import (
     Trainer,
     DataCollatorForLanguageModeling
 )
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+# --- Import PeftModel ---
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
 import os
 import argparse
 import sys
@@ -29,49 +30,32 @@ from src.utils import (
 # Hacemos el tokenizer global para que las funciones de mapeo puedan acceder a él
 tokenizer = None
 
-def prepare_dataset_from_scratch(dataset_path: str, config: dict, is_reasoning_experiment: bool):
+# --- FUNCIÓN DE PREPARACIÓN DE DATOS PARA SILVER SET ---
+# (Esta función no necesita cambios, ya que maneja los casos v1, v3 y v4)
+def prepare_dataset_from_scratch(dataset_path: str, config: dict, prompt_id: str, is_reasoning_experiment: bool):
     """
     Función para datasets (como el Silver Set) que necesitan ser construidos
     haciendo un merge de varias fuentes de datos.
     """
     print("   -> Modo de carga Silver Set: Se requiere reconstrucción de prompts.")
-    
-    # Cargar los dataframes necesarios
     main_df = pd.read_json(os.path.join(PROJECT_ROOT, dataset_path), lines=True)
     cvs_df = pd.read_csv(os.path.join(PROJECT_ROOT, config['data_paths']['processed']['cvs']))
     offers_df = pd.read_csv(os.path.join(PROJECT_ROOT, config['data_paths']['processed']['offers']))
-    
-    # Aplicar formato enriquecido
-    print("   -> Aplicando formato enriquecido a CVs y ofertas...")
     cvs_df['cv_text'] = cvs_df.apply(lambda row: format_entity_text(row, get_cv_sections()), axis=1)
     offers_df['offer_text'] = offers_df.apply(lambda row: format_entity_text(row, get_offer_sections()), axis=1)
-
-    # Combinar los dataframes
-    print("   -> Combinando datos para crear los pares de entrenamiento...")
     merged_df = pd.merge(main_df, cvs_df[['candidate_id', 'cv_text']], on='candidate_id', how='inner')
     full_train_df = pd.merge(merged_df, offers_df[['job_id', 'offer_text']], on='job_id', how='inner')
     
-    # Cargar la plantilla del prompt
-    prompt_template = load_prompt_template(config['student_model']['prompt_id'])
+    prompt_template = load_prompt_template(prompt_id)
     
-    # Construir el texto final para el entrenamiento
     def create_full_text(row):
-        # El prompt_template ya se ha cargado fuera de esta función anidada.
-        # Formateamos el prompt con los textos del CV y la oferta.
         prompt = prompt_template.format(cv=row['cv_text'], job_description=row['offer_text'])
-        
-        # Ahora, construimos la "respuesta" que el modelo debe aprender a generar.
         if is_reasoning_experiment:
-            # Para el experimento de razonamiento (v4), la respuesta es la justificación completa.
             just_dict = row['teacher_justification']
-            
-            # Formateamos la justificación a un string legible, asegurándonos de manejar casos vacíos.
             strengths = "\n".join([f"- {s}" for s in just_dict.get('strengths', [])]) if just_dict.get('strengths') else "N/A"
             gaps = "\n".join([f"- {g}" for g in just_dict.get('concerns_and_gaps', [])]) if just_dict.get('concerns_and_gaps') else "N/A"
             potential = "\n".join([f"- {p}" for p in just_dict.get('potential', [])]) if just_dict.get('potential') else "N/A"
             summary = just_dict.get('final_summary', 'N/A')
-            
-            # La respuesta es la cadena de texto completa que sigue al prompt.
             response = (
                 f"Strengths:\n{strengths}\n\n"
                 f"Concerns and Gaps:\n{gaps}\n\n"
@@ -80,34 +64,40 @@ def prepare_dataset_from_scratch(dataset_path: str, config: dict, is_reasoning_e
                 f"Score: {row['teacher_score']}"
             )
         else:
-            # Para los experimentos "Score-Only" (v3), la respuesta es solo el score.
             response = f"Score: {row['teacher_score']}"
-            
-        # El texto completo para el entrenamiento es la concatenación del prompt y la respuesta esperada.
-        # El modelo aprenderá a generar la 'response' cuando se le dé el 'prompt'.
         return prompt + response
         
     full_train_df['full_text'] = full_train_df.apply(create_full_text, axis=1)
-    
     return Dataset.from_pandas(full_train_df[['full_text']])
 
-
-def prepare_preformatted_dataset(dataset_path: str):
+# --- FUNCIÓN DE PREPARACIÓN DE DATOS PARA GOLD SET (MODIFICADA) ---
+def prepare_gold_set_for_finetuning(dataset_path: str, prompt_id: str):
     """
-
-    Función para datasets (como el Golden Set) que ya vienen pre-formateados
-    con las columnas 'prompt' y 'response'.
+    Función ADAPTADA para el Golden Set.
+    Construye el texto de entrenamiento usando el prompt de RAZONAMIENTO (`prompt_id`)
+    pero la respuesta de SOLO-SCORE de los datos (`response`).
     """
-    print("   -> Modo de carga Golden Set: Los prompts ya están pre-formateados.")
+    print("   -> Modo de carga Golden Set: Construyendo texto para calibración de score.")
     df = pd.read_json(os.path.join(PROJECT_ROOT, dataset_path), lines=True)
-    df['full_text'] = df['prompt'] + df['response']
+    
+    # Cargamos la plantilla de razonamiento (ej. S-04)
+    prompt_template = load_prompt_template(prompt_id)
+    instruction_part = prompt_template.split("[CV]")[0]
+    
+    # Para cada fila:
+    # 1. Tomamos la instrucción del prompt de razonamiento.
+    # 2. Le añadimos el contenido del CV y la Oferta (que viene en la columna 'prompt' del JSONL).
+    # 3. Le añadimos el sufijo '[ANALYSIS]\n' para que el modelo sepa que debe empezar a "pensar".
+    # 4. Concatenamos la respuesta final, que es SOLO el score del JSONL.
+    df['full_text'] = instruction_part + df['prompt'] + "\n\n[ANALYSIS]\n" + df['response']
+    
     return Dataset.from_pandas(df[['full_text']])
 
 
 def main(experiment_name: str):
     """Función principal que ejecuta el pipeline de entrenamiento para un experimento específico."""
     
-    global tokenizer # Permitir que esta función modifique el tokenizer global
+    global tokenizer
 
     print(f"--- [Paso 1/7] Cargando configuración para el experimento: '{experiment_name}' ---")
     config = load_config()
@@ -121,7 +111,7 @@ def main(experiment_name: str):
     train_params = exp_config['training_params']
     
     os.environ["WANDB_PROJECT"] = "TFG_DistilMatch"
-    os.environ["WANDB_RUN_NAME"] = exp_config['run_name']
+    os.environ["WANDB_RUN_NAME"] = exp_config.get('run_name', experiment_name)
 
     print(f"--- [Paso 2/7] Preparando tokenizer para '{model_config['base_model_name']}' ---")
     tokenizer = AutoTokenizer.from_pretrained(model_config['base_model_name'])
@@ -130,21 +120,21 @@ def main(experiment_name: str):
     
     print(f"--- [Paso 3/7] Cargando y procesando dataset desde '{exp_config['dataset_path']}' ---")
     dataset_path = exp_config['dataset_path']
+    prompt_id = exp_config.get('prompt_id', config['student_model']['prompt_id'])
+    print(f"   -> Usando prompt_id: {prompt_id}")
 
-    is_reasoning = "reasoning" in experiment_name.lower()
-
-    # Lógica condicional para cargar el dataset correcto
+    # Lógica condicional para cargar y procesar el dataset
     if "gold_standard" in dataset_path:
-        dataset = prepare_preformatted_dataset(dataset_path)
+        # Usamos la nueva función específica para el Golden Set
+        dataset = prepare_gold_set_for_finetuning(dataset_path, prompt_id)
     elif "silver_standard" in dataset_path:
-        dataset = prepare_dataset_from_scratch(dataset_path, config, is_reasoning_experiment=is_reasoning)
-
+        is_reasoning = "reasoning" in experiment_name.lower()
+        dataset = prepare_dataset_from_scratch(dataset_path, config, prompt_id, is_reasoning_experiment=is_reasoning)
     else:
         raise ValueError(f"Ruta de dataset no reconocida: {dataset_path}")
 
-    # Tokenización
     def tokenize_function(examples):
-        return tokenizer(examples['full_text'], truncation=True, max_length=2048) # Aumentado el max_length
+        return tokenizer(examples['full_text'], truncation=True, max_length=2048)
 
     tokenized_dataset = dataset.map(tokenize_function, batched=True, remove_columns=dataset.column_names)
     print(f"Dataset procesado. Número de ejemplos: {len(tokenized_dataset)}")
@@ -154,17 +144,20 @@ def main(experiment_name: str):
     model = AutoModelForCausalLM.from_pretrained(model_config['base_model_name'], quantization_config=bnb_config, device_map="auto")
     model = prepare_model_for_kbit_training(model)
     
-    lora_config = LoraConfig(r=16, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.1, bias="none", task_type="CAUSAL_LM")
-    model = get_peft_model(model, lora_config)
+    base_lora_path = exp_config.get("base_lora_adapters_path")
+    if base_lora_path:
+        print(f"   -> Cargando adaptadores LoRA existentes desde: {base_lora_path}")
+        model = PeftModel.from_pretrained(model, base_lora_path, is_trainable=True)
+    else:
+        print("   -> Creando nuevos adaptadores LoRA.")
+        lora_config = LoraConfig(r=16, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj", "o_proj"], lora_dropout=0.1, bias="none", task_type="CAUSAL_LM")
+        model = get_peft_model(model, lora_config)
+    
     model.print_trainable_parameters()
 
     print("--- [Paso 5/7] Definiendo los argumentos de entrenamiento ---")
-    # Asegurarse de que el batch size es al menos 1
-    per_device_batch_size = min(train_params['batch_size'], 4) # Ajustado para VRAM
-    if train_params['batch_size'] < per_device_batch_size:
-        gradient_accumulation_steps = 1
-    else:
-        gradient_accumulation_steps = train_params['batch_size'] // per_device_batch_size
+    per_device_batch_size = train_params['batch_size']
+    gradient_accumulation_steps = 1
     
     training_args = TrainingArguments(
         output_dir=exp_config['output_dir'], 
@@ -196,4 +189,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ejecutar un experimento de fine-tuning específico.")
     parser.add_argument("experiment_name", type=str, help="El nombre del experimento a ejecutar (definido en config.yaml).")
     args = parser.parse_args()
+    
+    # Renombrar el experimento v5 para mayor claridad
+    if args.experiment_name == "v5_silver_and_gold_reasoning":
+        print("Advertencia: El nombre 'v5_silver_and_gold_reasoning' está obsoleto.")
+        print("Usando la nueva configuración 'v5_gold_refinement'. Asegúrate de que está en tu config.yaml.")
+        args.experiment_name = "v5_gold_refinement"
+
     main(args.experiment_name)

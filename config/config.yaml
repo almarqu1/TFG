@@ -33,6 +33,7 @@ data_paths:
     # El "Silver Set": un gran corpus de datos etiquetados por el Teacher (soft labels)
     # que se usará para el fine-tuning del modelo Student.
     silver_standard_train: "data/02_intermediate/silver_standard_train.jsonl"
+    silver_standard_train_balanced: "data/02_intermediate/silver_standard_train_balanced.jsonl"
   
   # 03_gold_standard: La "verdad absoluta" del proyecto. Curado manualmente por el experto.
   gold_standard:
@@ -44,6 +45,10 @@ data_paths:
     test_csv: "data/03_gold_standard/gold_standard_test.csv" 
     train_jsonl: "data/03_gold_standard/gold_standard_train.jsonl" 
     test_jsonl: "data/03_gold_standard/gold_standard_test.jsonl" 
+    enriched_full_jsonl: "data/03_gold_standard/gold_standard_enriched_full.jsonl"
+    #Reporte de los pares del Golden Set que no se pudieron encontrar en los datos procesados.
+    discarded_pairs_csv: "data/03_gold_standard/gold_standard_discarded_pairs.csv"
+    
 
 # --- Parámetros para la División de Datos --- 
 # Usado por `scripts/prepare_evaluation_sets.py`
@@ -61,9 +66,7 @@ output_paths:
 
 # --- Parámetros de Modelos y Prompts ---
 teacher_model:
-  # IMPORTANTE: Usar el ID oficial del modelo del proveedor para reproducibilidad.
-  # Ejemplo: "gemini-1.5-pro-latest"
-  model_name: "gemini-1.5-pro-latest" # <-- REVISAR Y ACTUALIZAR
+  model_name: "gemini-2.5-pro"
   # Temperatura baja para que el Teacher sea lo más determinista y consistente posible.
   # En la fase de generación de datos, no buscamos creatividad, sino precisión.
   temperature: 0.2
@@ -142,13 +145,16 @@ experiments:
       output_dir: "models/distilmatch_v4_silver_balanced_reasoning"
       run_name: "distilmatch_v4_silver_balanced_reasoning"
 
-  v5_silver_reasoning:
-      description: "KD con Silver Set desequilibrado, entrenado para generar el razonamiento completo."
-      dataset_path: "data/02_intermediate/silver_standard_train.jsonl"
-      prompt_id: "S-04_student_reasoning_structured"
-      training_params:
-        num_epochs: 4
-        learning_rate: 2e-5
-        batch_size: 8 # Usamos un batch size más pequeño porque el texto es más largo
-      output_dir: "models/distilmatch_v4_silver_balanced_reasoning"
-      run_name: "distilmatch_v4_silver_balanced_reasoning"
+  # Experimento de Refinamiento: Tomar el mejor modelo (v4) y afinarlo con el Golden Set
+  v5_gold_refinement:
+    description: "Toma los adaptadores LoRA de v4 y continúa el entrenamiento con el Golden Set para un refinamiento final."
+    dataset_path: "data/03_gold_standard/gold_standard_train.jsonl"
+    prompt_id: "S-04_student_reasoning_structured" # Usamos el mismo formato de prompt que v4
+    # Ruta a los adaptadores del modelo que queremos seguir entrenando
+    base_lora_adapters_path: "models/distilmatch_v4_silver_balanced_reasoning/final_checkpoint"
+    training_params:
+      num_epochs: 8 # Más épocas porque el dataset es pequeño
+      learning_rate: 1e-5 # Tasa de aprendizaje más baja para un ajuste fino
+      batch_size: 4 # Batch size pequeño para datos de alta calidad
+    output_dir: "models/distilmatch_v5_gold_refinement"
+    run_name: "distilmatch_v5_gold_refinement"

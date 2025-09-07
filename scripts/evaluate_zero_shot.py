@@ -33,14 +33,24 @@ from scipy.stats import spearmanr, pearsonr
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 from src.utils import load_config, parse_score_from_string
+from src.constants import SCORE_TO_CATEGORY, CATEGORY_TO_SCORE
+
 
 # --- 1. CONFIGURACIÓN Y UTILIDADES (Candidatos a src/utils.py) ---
 
 # Configuración del logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+def map_score_to_category(score: float) -> str:
+    """Encuentra la categoría de la rúbrica más cercana a un score dado."""
+    if score is None:
+        return None
+    # Encuentra la clave (score de la rúbrica) que tiene la mínima diferencia absoluta con el score dado
+    closest_score = min(CATEGORY_TO_SCORE.values(), key=lambda k: abs(k - score))
+    return SCORE_TO_CATEGORY[closest_score]
+
 def calculate_and_log_metrics(results_df: pd.DataFrame, model_name: str):
-    """Calcula y muestra las métricas de evaluación clave."""
+    """Calcula y muestra las métricas de evaluación clave, incluyendo la accuracy categórica."""
     df = results_df.copy()
     # Limpiamos el df para asegurar que solo tenemos pares válidos para el cálculo.
     df['true_score'] = df['true_score'].apply(lambda x: parse_score_from_string(str(x)))
@@ -53,15 +63,28 @@ def calculate_and_log_metrics(results_df: pd.DataFrame, model_name: str):
     y_true = df['true_score'].astype(float)
     y_pred = df['predicted_score'].astype(float)
 
+    # Métricas de Regresión y Correlación
     mae = mean_absolute_error(y_true, y_pred)
     spearman_corr, _ = spearmanr(y_true, y_pred)
     pearson_corr, _ = pearsonr(y_true, y_pred)
+
+    # Cálculo de la Accuracy Categórica
+    df['true_category'] = df['true_score'].map(SCORE_TO_CATEGORY)
+    df['predicted_category'] = df['predicted_score'].apply(map_score_to_category)
+    
+    # Calculamos la accuracy solo donde la categoría predicha no es nula
+    valid_categories_df = df.dropna(subset=['predicted_category'])
+    if not valid_categories_df.empty:
+        categorical_accuracy = (valid_categories_df['true_category'] == valid_categories_df['predicted_category']).mean() * 100
+    else:
+        categorical_accuracy = 0.0
 
     logging.info(f"\n--- Métricas de Evaluación para: {model_name.upper()} ---")
     logging.info(f"Pares Válidos Evaluados: {len(df)}")
     logging.info(f"Error Absoluto Medio (MAE): {mae:.4f}")
     logging.info(f"Correlación de Pearson (r): {pearson_corr:.4f} (Mide relación lineal)")
-    logging.info(f"Correlación de Spearman (ρ): {spearman_corr:.4f} (Mide relación monotónica, más robusta a outliers)")
+    logging.info(f"Correlación de Spearman (ρ): {spearman_corr:.4f} (Mide relación monotónica, más robusta)")
+    logging.info(f"Accuracy Categórica: {categorical_accuracy:.2f}% (Alineamiento con decisión de negocio)")
     logging.info("--------------------------------------------------")
 
 
@@ -174,9 +197,7 @@ def main():
     try:
         cfg = load_config()
         project_root = Path(__file__).resolve().parent.parent
-        cfg['data_paths']['gold_standard']['test_jsonl'] = project_root / cfg['data_paths']['gold_standard']['test_jsonl']
-        cfg['output_paths']['eval_results']['student_baseline'] = project_root / cfg['output_paths']['eval_results']['student_baseline']
-        cfg['output_paths']['eval_results']['teacher_candidate'] = project_root / cfg['output_paths']['eval_results']['teacher_candidate']
+        
     except (FileNotFoundError, KeyError) as e:
         logging.error(f"Error de configuración: {e}")
         return
@@ -184,7 +205,7 @@ def main():
     logging.info(f"--- Iniciando evaluación para el modelo: {args.model_type.upper()} ---")
     
     # Cargamos el dataset de test curado
-    test_dataset_path = cfg['data_paths']['gold_standard']['test_jsonl']
+    test_dataset_path = project_root / cfg['data_paths']['gold_standard']['enriched_full_jsonl']
     try:
         test_dataset = pd.read_json(test_dataset_path, lines=True)
         logging.info(f"Dataset de test cargado desde '{test_dataset_path}' ({len(test_dataset)} filas).")
@@ -195,13 +216,13 @@ def main():
     # Selección polimórfica del evaluador
     if args.model_type == 'student':
         evaluator = StudentEvaluator(cfg['student_model']['base_model_name'])
-        output_path = cfg['output_paths']['eval_results']['student_baseline']
+        output_path = project_root / cfg['output_paths']['eval_results']['student_baseline']
     else: # teacher
         evaluator = TeacherEvaluator(
             cfg['teacher_model']['model_name'],
             delay_sec=cfg['silver_set_generation'].get('delay_between_requests_sec', 12.0)
         )
-        output_path = cfg['output_paths']['eval_results']['teacher_candidate']
+        output_path = project_root / cfg['output_paths']['eval_results']['teacher_candidate']
     
     # Ejecución de la evaluación
     results_df = evaluator.evaluate(test_dataset)

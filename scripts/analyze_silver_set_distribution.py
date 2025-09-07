@@ -41,8 +41,10 @@ def main():
     # 1. Cargar configuración del proyecto
     try:
         config = load_config()
+        #silver_set_path = config['data_paths']['intermediate']['silver_standard_train_balanced']
         silver_set_path = config['data_paths']['intermediate']['silver_standard_train']
         output_report_dir = config['output_paths']['reports']
+        #chart_filename = 'balanced_silver_set_class_distribution.png'
         chart_filename = 'silver_set_class_distribution.png'
     except Exception as e:
         print(f"❌ Error al cargar la configuración: {e}")

@@ -140,12 +140,12 @@ if 'initialized' not in st.session_state:
 # --- BARRA LATERAL (SIDEBAR) ---
 
 with st.sidebar:
-    st.header("🕹️ Panel de Control")
+    st.header("Panel de Control")
     annotator_id = st.text_input("Tu ID de Anotador:", value="expert_01", key="annotator_id_input")
     
     st.divider()
     
-    st.header("🔬 Controles de Exploración")
+    st.header("Controles de Exploración")
     # Campo de búsqueda para filtrar ofertas por título.
     search_query = st.text_input("Buscar en Título de Oferta:", placeholder="Ej: Data Scientist...")
     if search_query:
@@ -170,7 +170,7 @@ with st.sidebar:
     
     st.divider()
     
-    st.header("📋 Golden Set Actual")
+    st.header("Golden Set Actual")
     # Funcionalidad para cargar un archivo CSV y continuar una sesión de anotación.
     uploaded_file = st.file_uploader("Continuar Anotando (Cargar CSV):", type="csv")
     if uploaded_file and not st.session_state.file_loaded:
@@ -190,7 +190,7 @@ with st.sidebar:
 
 # --- INTERFAZ PRINCIPAL ---
 
-st.title("DistilMatch - Golden Set Builder 🧑‍🔬")
+st.title("DistilMatch - Golden Set Builder")
 st.markdown("Usa la barra lateral para **buscar**, **explorar** y **gestionar tu sesión** de anotación.")
 
 # Detiene la ejecución si los datos no se pudieron cargar al inicio.

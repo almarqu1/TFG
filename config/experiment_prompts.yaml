@@ -18,7 +18,7 @@ P-01_zero_shot:
 
 P-02_few_shot:
   status: "archived"
-  description: "Few-shot sin CoT. Proporciona 2-3 ejemplos de CV-Oferta con su score esperado."
+  description: "Few-shot sin CoT. Proporciona 2-3 ejemplos de CV-Oferta con su score esperado." # El prompt ocupaba demasiado contexto sin mejorar significativamente el rendimiento.
   hypothesis: "Los ejemplos (few-shot) mejorarán significativamente la consistencia y precisión del modelo al anclar su comprensión de la escala de puntuación."
   path: "report/prompts/P-02_few_shot.txt"
   techniques:
@@ -27,7 +27,7 @@ P-02_few_shot:
 
 P-03_cot_zero_shot:
   status: "archived"
-  description: "Zero-shot con Chain-of-Thought (CoT). Pide al modelo que 'piense paso a paso' antes de dar el score."
+  description: "Zero-shot con Chain-of-Thought (CoT). Pide al modelo que 'piense paso a paso' antes de dar el score." # El prompt ocupaba demasiado contexto sin mejorar significativamente el rendimiento.
   hypothesis: "Forzar al modelo a razonar explícitamente (CoT) mejorará la calidad de la evaluación, especialmente en casos ambiguos."
   path: "report/prompts/P-03_cot_zero_shot.txt"
   techniques:
@@ -37,7 +37,7 @@ P-03_cot_zero_shot:
 
 P-04_cot_few_shot:
   status: "archived"
-  description: "Combinación fuerte: Few-shot con CoT. Proporciona ejemplos que incluyen el razonamiento."
+  description: "Combinación fuerte: Few-shot con CoT. Proporciona ejemplos que incluyen el razonamiento." # El prompt ocupaba demasiado contexto sin mejorar significativamente el rendimiento.
   hypothesis: "Esta es la combinación teóricamente más potente. Los ejemplos no solo muestran el qué (score) sino el cómo (razonamiento), lo que debería maximizar el rendimiento."
   path: "report/prompts/P-04_cot_few_shot.txt"
   techniques:
@@ -47,7 +47,7 @@ P-04_cot_few_shot:
 
 P-05_pragmatic_zero_shot:
   status: "archived"
-  description: "Zero-shot con enfoque 'cazatalentos', usando la rúbrica de 4 categorías."
+  description: "Zero-shot con enfoque 'cazatalentos', usando la rúbrica de 4 categorías." # Pivote para alinear mejor el prompt con la tarea real de selección de candidatos.
   hypothesis: "Alinear el prompt con la rúbrica pragmática de 4 categorías (MUST INTERVIEW, etc.) reducirá la ambigüedad y mejorará la alineación con el juicio humano."
   path: "report/prompts/P-05_pragmatic_zero_shot.txt"
   techniques:
@@ -89,7 +89,7 @@ S-01_student_evaluation:
     - simple-output
 
 S-03_student_silver_bullet:
-  status: "final-student" # Designado como el prompt final para el Student.
+  status: "final-student" # Reemplazado por S-04 al observar que el razonamiento generaba mejor rendimiento.
   description: "Prompt ultra-restrictivo que fuerza al modelo a dar únicamente el score numérico."
   hypothesis: "Para la evaluación y el fine-tuning, es crucial que la salida sea perfectamente parseable. Un prompt muy restrictivo minimiza los errores de formato y acelera el pipeline."
   path: "report/prompts/S-03_student_silver_bullet.txt"
