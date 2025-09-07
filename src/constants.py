@@ -1,5 +1,3 @@
-# TFG_DistilMatch/src/constants.py
-
 """
 Módulo de Constantes del Proyecto.
 

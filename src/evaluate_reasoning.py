@@ -1,6 +1,4 @@
-# TFG_DistilMatch/src/evaluate_reasoning.py
 # VERSIÓN ADAPTADA PARA MODELOS ENTRENADOS CON "EXPLANATION-TUNING"
-
 """
 Script de Evaluación para Modelos de Razonamiento
 

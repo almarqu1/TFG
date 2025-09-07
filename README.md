@@ -1,140 +1,108 @@
-# DistilMatch: Sistema de Scoring Interpretable para Matching de Talento
+DistilMatch: Sistema Interpretable de Adecuación de Talento con LLMs
+Autor: Álvaro Martínez Quilis
+TFG - Grado en Ingeniería Informática - ETSIINF (UPV)
+Fecha: Julio 2024
 
-**Autor:** [Tu Nombre Completo]  
-**TFG - [Nombre de tu Titulación] - [Nombre de tu Universidad]**  
-**Fecha:** [Mes y Año de Finalización]
+Python
+Hugging Face Transformers
+PyTorch
+Streamlit
+DVC
 
-[![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
-[![Hugging Face Transformers](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Transformers-yellow)](https://huggingface.co/transformers/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)](https://pytorch.org/)
-[![DVC](https://img.shields.io/badge/DVC-Data%20Version%20Control-blue?style=flat&logo=dvc)](https://dvc.org/)
-[![SHAP](https://img.shields.io/badge/SHAP-Explainable%20AI-green)](https://shap.readthedocs.io/en/latest/)
+1. Visión General del Proyecto
+DistilMatch es un sistema avanzado de apoyo a la decisión para procesos de selección de personal, desarrollado como Trabajo de Fin de Grado. El proyecto aborda las limitaciones de los Applicant Tracking Systems (ATS) tradicionales, que se basan en la coincidencia de palabras clave, proponiendo una solución fundamentada en la comprensión semántica profunda del lenguaje natural.
 
----
+El sistema utiliza un Gran Modelo de Lenguaje (LLM) especializado para evaluar la idoneidad entre un currículum y una oferta de empleo, proporcionando no solo una puntuación numérica, sino también una justificación razonada de su decisión, alineándose con los principios de la IA Explicable (XAI).
 
-## 1. Introducción
+Este repositorio contiene todo el código, los datos, los modelos entrenados y una demo interactiva para explorar y reproducir la investigación.
 
-**DistilMatch** es un proyecto de fin de grado que presenta un framework para la asignación automática y el scoring de compatibilidad entre candidatos (CVs) y ofertas de trabajo en el mercado europeo. El sistema está diseñado para ser:
+2. Características Clave
+La arquitectura de DistilMatch se basa en tecnologías de vanguardia para lograr un equilibrio entre rendimiento y eficiencia:
 
-*   **Cuantitativo:** Proporciona un score numérico de compatibilidad (0-100).
-*   **Interpretable:** Ofrece explicaciones claras sobre por qué se asigna un determinado score, destacando las palabras y frases clave.
-*   **Adaptativo:** Utiliza un bucle de **Active Learning** para mejorar continuamente con un mínimo esfuerzo de etiquetado humano.
-*   **Eficiente:** Emplea **Knowledge Distillation** para transferir el conocimiento de un modelo grande (GPT-4) a un modelo de producción ligero y rápido (BERT).
+🧠 Destilación de Conocimiento (Knowledge Distillation): Un modelo Teacher de frontera (Google Gemini 2.5 Pro) transfiere su capacidad de razonamiento a un modelo Student mucho más ligero y eficiente (Qwen3-4B-Instruct).
+⚡ Ajuste Fino Eficiente (PEFT): Se utiliza LoRA (Low-Rank Adaptation) junto con cuantización de 4-bits para entrenar el modelo Student en hardware de consumo (una única GPU con <16GB de VRAM), haciendo la investigación accesible y reproducible.
+🔍 Explicabilidad Inherente (Generative XAI): A diferencia de métodos post-hoc como SHAP, el modelo genera explicaciones textuales (fortalezas, debilidades, potencial) como parte de su tarea principal, ofreciendo una transparencia total en su toma de decisiones.
+💡 El Descubrimiento Central: "Explanation-Tuning": La investigación demostró que entrenar al modelo para replicar el razonamiento completo del Teacher (no solo su puntuación final) es significativamente más efectivo, mejorando todas las métricas de evaluación.
+🧪 Demo Interactiva: Una aplicación desarrollada en Streamlit permite a cualquier usuario interactuar con el modelo final, probar sus capacidades con diferentes perfiles y ofertas, y visualizar su rendimiento en tiempo real.
+3. Demo Interactiva en Streamlit
+Para una exploración práctica del sistema, puedes ejecutar la demo localmente. La aplicación permite buscar en los datasets, seleccionar una oferta y una lista de candidatos, y obtener un ranking de compatibilidad detallado y justificado.
 
-Este repositorio contiene todo el código fuente, los datos versionados, los modelos entrenados y la documentación necesaria para reproducir los experimentos y resultados de la memoria del TFG.
+Demo de DistilMatch en Streamlit
 
-## 2. Metodología
+Para lanzar la aplicación:
 
-El core de DistilMatch se basa en un pipeline de **Teacher-Student** con un humano en el bucle (*human-in-the-loop*):
+bash
+# Asegúrate de tener el entorno virtual activado
+streamlit run app.py
+4. Estructura del Repositorio
+El proyecto sigue una estructura MLOps para garantizar la modularidad y reproducibilidad:
 
-1.  **Etiquetado Humano (Gold Standard):** Un conjunto de datos de ~360 pares (CV, oferta) es anotado por expertos humanos usando una escala ordinal de 5 categorías para establecer la "verdad absoluta".
-2.  **Modelo Teacher (GPT-4):** Un Large Language Model (LLM) actúa como un "anotador experto" para generar *soft labels* (scores numéricos) a gran escala sobre el resto del dataset.
-3.  **Modelo Student (BERT):** Un modelo `bert-base-multilingual-cased` es entrenado para replicar los scores del Teacher y anclarse a los datos Gold Standard, resultando en un modelo rápido y preciso.
-4.  **Active Learning:** El modelo Student identifica los pares más ambiguos para que sean etiquetados por un humano, optimizando el ciclo de mejora continua.
-5.  **Explicabilidad (XAI):** Se utiliza la librería `shap` para generar explicaciones a nivel de token, proporcionando transparencia en las decisiones del modelo.
-
-## 3. Estructura del Repositorio
-
-```
+text
 TFG_DistilMatch/
-├── data/              # Datos del proyecto (gestionados por DVC)
-├── models/            # Modelos entrenados (gestionados por DVC)
-├── notebooks/         # Jupyter Notebooks para exploración
-├── outputs/           # Reportes de métricas y explicaciones
-├── report/            # Documento de la memoria y presentación
-├── src/               # Código fuente principal del proyecto
-├── .dvcignore         # Archivos ignorados por DVC
-├── .gitignore         # Archivos ignorados por Git
-├── dvc.yaml           # Definición del pipeline de MLOps
-├── Dockerfile         # Receta para construir la imagen de la aplicación
-├── README.md          # Este archivo
-└── requirements.txt   # Dependencias de Python
-```
+├── config/              # Ficheros de configuración (parámetros, prompts)
+├── data/                # Datos del proyecto (gestionados por DVC)
+├── models/              # Adaptadores LoRA de cada exp. (gestionados por DVC)
+├── notebooks/           # Notebooks para exploración y análisis cualitativo
+├── outputs/             # Informes de evaluación, ejemplos de explicabilidad
+├── scripts/             # Scripts ejecutables (generación de datos, evaluación)
+├── src/                 # Código fuente principal (lógica de entrenamiento, utils)
+├── app.py               # Código de la aplicación de Streamlit
+├── .dvc/                # Metadatos de DVC
+├── dvc.yaml             # Definición del pipeline de MLOps
+└── requirements.txt     # Dependencias de Python
+5. Instalación y Uso
+5.1. Prerrequisitos
+Python 3.10 o superior
+Git y Git LFS
+DVC (pip install dvc[s3])
+5.2. Pasos de Instalación
+Clona el repositorio:
 
-## 4. Instalación y Configuración
+bash
+git clone https://github.com/tu_usuario/tu_repositorio.git
+cd TFG_DistilMatch
+Crea y activa un entorno virtual:
 
-Para poner en marcha este proyecto en tu máquina local, sigue estos pasos.
+bash
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# .\.venv\Scripts\activate  # Windows
+Instala las dependencias:
 
-### 4.1. Prerrequisitos
+bash
+pip install -r requirements.txt
+Descarga los datos y modelos con DVC:
 
-*   Python 3.10 o superior
-*   Git
-*   DVC (`pip install dvc`)
-*   (Opcional, para DVC) Configurar un almacenamiento remoto (S3, GCS, etc.). Sigue la [guía de DVC](https://dvc.org/doc/command-reference/remote/add).
+bash
+dvc pull
+Este comando descargará los datasets procesados y los adaptadores del modelo final.
 
-### 4.2. Pasos de Instalación
+5.3. Reproducir Experimentos
+El pipeline está definido en dvc.yaml. Para reproducir el experimento de evaluación del modelo final:
 
-1.  **Clona el repositorio:**
-    ```bash
-    git clone [URL-DE-TU-REPOSITORIO]
-    cd TFG_DistilMatch
-    ```
+bash
+# Este comando evaluará el checkpoint del modelo v4 contra el Golden Set
+dvc repro evaluate_v4
+Para ejecutar el entrenamiento de un experimento específico (requiere una GPU configurada):
 
-2.  **Crea y activa un entorno virtual:**
-    ```bash
-    python -m venv .venv
-    # En Windows:
-    .\.venv\Scripts\activate
-    # En macOS/Linux:
-    source .venv/bin/activate
-    ```
+bash
+# Ejemplo para lanzar el entrenamiento del experimento v4
+python scripts/run_finetuning.py --experiment_id v4
+6. Resultados Clave
+La estrategia de Explanation-Tuning (modelo v4) demostró una mejora sustancial sobre la capacidad zero-shot del modelo base, validando el éxito de la destilación de conocimiento.
 
-3.  **Instala las dependencias:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+Métrica de Evaluación	Baseline (Student Zero-Shot)	Modelo Final (v4 - Explanation-Tuning)	Mejora
+Error Absoluto Medio (MAE) ↓	27.16	19.98	-26.4%
+Correlación de Spearman (
+ρ
+ρ) ↑	0.388	0.489	+26.2%
+Exactitud Categórica ↑	31.8%	56.1%	+76.4%
+La mejora en la Correlación de Spearman es el resultado más importante, ya que indica que el modelo final es significativamente mejor para ordenar correctamente a los candidatos de más a menos idóneo, que es el objetivo principal de un sistema de preselección.
 
-4.  **Descarga los datos y modelos versionados con DVC:**
-    ```bash
-    dvc pull
-    ```
-    Este comando descargará los datasets de `data/` y los modelos de `models/` desde el almacenamiento remoto configurado.
-
-## 5. Uso y Reproducción de Experimentos
-
-El pipeline completo está definido en el archivo `dvc.yaml`. Puedes reproducir todo el experimento con un solo comando.
-
-### 5.1. Reproducir el Pipeline Completo
-
-Este comando ejecutará todas las etapas definidas en `dvc.yaml`: pre-procesamiento de datos, entrenamiento del modelo, y evaluación. DVC se encargará de ejecutar solo las partes que hayan cambiado desde la última ejecución.
-
-```bash
-dvc repro
-```
-
-### 5.2. Ejecutar Etapas Individualmente
-
-Puedes ejecutar scripts individuales si lo necesitas. Asegúrate de que tu entorno virtual esté activado.
-
-*   **Entrenar el modelo:**
-    ```bash
-    python src/train.py
-    ```
-
-*   **Evaluar el modelo:**
-    ```bash
-    python src/evaluate.py
-    ```
-
-*   **Obtener un score para un par (CV, Oferta):**
-    ```bash
-    python src/score.py --cv_path "ruta/a/un/cv.txt" --oferta_path "ruta/a/una/oferta.txt"
-    ```
-
-## 6. Resultados Clave
-
-El modelo DistilMatch ha sido evaluado rigurosamente contra un baseline de similitud por coseno, demostrando una mejora significativa en todas las métricas clave.
-
-| Métrica | Baseline (Coseno) | DistilMatch (v1) |
-| :--- | :--- | :--- |
-| **Pearson r** | 0.45 | **0.82** |
-| **MAE** | 25.8 | **12.3** |
-| **Accuracy Cat.** | 41% | **75%** |
-| **MAP@10** | 0.38 | **0.65** |
-
-*(Nota: Estos son valores de ejemplo. Reemplázalos con tus resultados finales.)*
-
-## 7. Limitaciones y Trabajo Futuro
-
-*   **Limitaciones:** El dataset está fechado en 2004, lo que puede no reflejar el mercado laboral actual. El análisis de fairness se basa en inferencias demográficas que pueden contener errores.
-*   **Trabajo Futuro:** Explorar arquitecturas de modelos *student* más avanzadas (ej. DeBERTa), integrar un feedback de usuario más granular en el bucle de Active Learning y expandir el dataset con datos más recientes y de más sectores.
+7. Limitaciones y Trabajo Futuro
+Limitaciones: El Golden Set fue anotado por un único experto. Los datasets están en inglés y centrados en el mercado de EEUU. Existe un riesgo potencial de heredar sesgos del modelo Teacher.
+Trabajo Futuro:
+Auditoría y Mitigación de Sesgos (Fairness).
+Implementación de un ciclo de Aprendizaje Activo (Human-in-the-loop).
+Especialización por Dominios mediante diferentes adaptadores LoRA.
+Expansión a arquitecturas multimodales (ej. análisis de repositorios de GitHub).

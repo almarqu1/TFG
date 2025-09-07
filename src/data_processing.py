@@ -1,5 +1,3 @@
-# TFG_DistilMatch/src/data_processing.py
-
 """
 Pipeline de Pre-procesamiento y Enriquecimiento de Datos.
 

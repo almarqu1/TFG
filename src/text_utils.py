@@ -1,5 +1,3 @@
-# TFG_DistilMatch/src/text_utils.py
-
 """
 Módulo de Utilidades para la Manipulación de Texto.
 

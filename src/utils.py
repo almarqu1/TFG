@@ -1,5 +1,3 @@
-# TFG_DistilMatch/src/utils.py
-
 """
 Módulo de Utilidades Compartidas
 

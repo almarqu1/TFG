@@ -1,5 +1,3 @@
-# TFG_DistilMatch/src/evaluate.py
-
 """
 Script de Evaluación Final
 
