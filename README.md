@@ -77,6 +77,11 @@ bash
 dvc pull
 Este comando descargará los datasets procesados y los adaptadores del modelo final.
 
+Descarga los datasets de Kaggle y colócalos en  data/00_raw  (necesitarás crear la carpeta):
+https://www.kaggle.com/datasets/arshkon/linkedin-job-postings (Dataset Ofertas)
+https://www.kaggle.com/datasets/saugataroyarghya/resume-dataset (Dataset CVs)
+NOTA: Asegúrate de que el archivo config.yaml tiene la ruta correcta para ambos datasets!
+
 5.3. Reproducir Experimentos
 El pipeline está definido en dvc.yaml. Para reproducir el experimento de evaluación del modelo final:
 
