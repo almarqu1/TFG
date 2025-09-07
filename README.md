@@ -1,7 +1,7 @@
 DistilMatch: Sistema Interpretable de Adecuación de Talento con LLMs
 Autor: Álvaro Martínez Quilis
-TFG - Grado en Ingeniería Informática - ETSIINF (UPV)
-Fecha: Julio 2024
+TFG - Grado en Ingeniería Informática - ETSINF (UPV)
+Fecha: Septiembre 2025
 
 Python
 Hugging Face Transformers
