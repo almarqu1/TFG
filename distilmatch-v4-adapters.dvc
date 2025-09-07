@@ -1,0 +1,6 @@
+outs:
+- md5: 17c5e61caef982f4b5910d974733bb5b.dir
+  size: 63119186
+  nfiles: 11
+  hash: md5
+  path: distilmatch-v4-adapters
