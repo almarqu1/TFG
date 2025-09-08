@@ -91,8 +91,8 @@ TFG_DistilMatch/
     > NOTA: Por el momento, se ha optado por no emplear DVC. Los adaptadores se encuentran en la carpeta "distilmatch-v4-adapters" del repositorio.
 
 5.  **Descarga los datasets de Kaggle:**
-    *https://www.kaggle.com/datasets/saugataroyarghya/resume-dataset (Dataset CVs)
-    *https://www.kaggle.com/datasets/arshkon/linkedin-job-postings
+*   https://www.kaggle.com/datasets/saugataroyarghya/resume-dataset (Dataset CVs)
+*   https://www.kaggle.com/datasets/arshkon/linkedin-job-postings
     > NOTA: asegúrate de que tienes los archivos descargados en data/00_raw (necesitarás crear la carpeta) o de que tu config.yaml refleja la ubicación de los datasets.
 
 ## 6. Resultados Clave
