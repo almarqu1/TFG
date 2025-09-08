@@ -2,7 +2,7 @@
 
 **Autor:** Álvaro Martínez Quilis  
 **TFG - Grado en Ingeniería Informática - ETSIINF (UPV)**  
-**Fecha:** Julio 2024
+**Fecha:** Septiembre 2025
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![Hugging Face Transformers](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-PEFT-yellow)](https://huggingface.co/docs/peft/index)
@@ -18,7 +18,7 @@
 
 El sistema utiliza un Gran Modelo de Lenguaje (LLM) especializado para evaluar la idoneidad entre un currículum y una oferta de empleo, proporcionando no solo una puntuación numérica, sino también una **justificación razonada** de su decisión, alineándose con los principios de la IA Explicable (XAI).
 
-Este repositorio contiene todo el código, los datos, los modelos entrenados y una demo interactiva para explorar y reproducir la investigación.
+Este repositorio contiene todo el código, los datos, el modelo entrenado y una demo interactiva para explorar y reproducir la investigación.
 
 ## 2. Características Clave
 
@@ -88,26 +88,12 @@ TFG_DistilMatch/
     ```bash
     dvc pull
     ```
-    > Este comando descargará los datasets procesados y los adaptadores del modelo final desde el almacenamiento remoto configurado.
+    > NOTA: Por el momento, se ha optado por no emplear DVC. Los adaptadores se encuentran en la carpeta "distilmatch-v4-adapters" del repositorio.
 
 5.  **Descarga los datasets de Kaggle:**
-    https://www.kaggle.com/datasets/saugataroyarghya/resume-dataset (Dataset CVs)
-    https://www.kaggle.com/datasets/arshkon/linkedin-job-postings
+    *https://www.kaggle.com/datasets/saugataroyarghya/resume-dataset (Dataset CVs)
+    *https://www.kaggle.com/datasets/arshkon/linkedin-job-postings
     > NOTA: asegúrate de que tienes los archivos descargados en data/00_raw (necesitarás crear la carpeta) o de que tu config.yaml refleja la ubicación de los datasets.
-
-### 5.3. Reproducir Experimentos
-El pipeline está definido en `dvc.yaml` y los scripts principales se encuentran en la carpeta `scripts/`.
-
-*   **Evaluar el modelo final:**
-    ```bash
-    # Este script evaluará el checkpoint del modelo v4 contra el Golden Set
-    python scripts/run_evaluation.py --experiment_id v4
-    ```
-*   **Entrenar un nuevo modelo (requiere GPU):**
-    ```bash
-    # Ejemplo para lanzar el entrenamiento del experimento v4
-    python scripts/run_finetuning.py --experiment_id v4
-    ```
 
 ## 6. Resultados Clave
 
@@ -128,3 +114,4 @@ La mejora en la **Correlación de Spearman** es el resultado más importante, ya
     2.  **Implementación de un ciclo de Aprendizaje Activo (*Human-in-the-loop*).**
     3.  **Especialización por Dominios** mediante diferentes adaptadores LoRA.
     4.  **Expansión a arquitecturas multimodales** (ej. análisis de repositorios de GitHub).
+    5.  **Expansión de Golden Set y Silver Set con más datos.**
