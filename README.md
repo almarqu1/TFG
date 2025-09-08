@@ -92,7 +92,7 @@ TFG_DistilMatch/
 
 5.  **Descarga los datasets de Kaggle:**
 *   https://www.kaggle.com/datasets/saugataroyarghya/resume-dataset (Dataset CVs)
-*   https://www.kaggle.com/datasets/arshkon/linkedin-job-postings
+*   https://www.kaggle.com/datasets/arshkon/linkedin-job-postings (Dataset Ofertas)
     > NOTA: asegúrate de que tienes los archivos descargados en data/00_raw (necesitarás crear la carpeta) o de que tu config.yaml refleja la ubicación de los datasets.
 
 ## 6. Resultados Clave
